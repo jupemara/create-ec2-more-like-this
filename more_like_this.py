@@ -24,7 +24,8 @@ DEFAULT = {
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
     'userdata': None,
-    'log_level': 'INFO'
+    'log_level': 'INFO',
+    'dry_run': False,
 }
 
 
@@ -131,7 +132,11 @@ def get_args():
     )
     override_option_group.add_option(
         '--override-shutdown-behavior', '-b',
-        type='string', default=DEFAULT['override_shutdown_behavior'],
+        type='choice', default=DEFAULT['override_shutdown_behavior'],
+        choices=[
+            'stop',
+            'terminate'
+        ],
         dest='override_shutdown_behavior',
         help=(
             'When you want to override new instance shutdown behavior, '
@@ -161,6 +166,12 @@ def get_args():
         '--userdata', '-U',
         type='string', default=DEFAULT['userdata'],
         help='Injected AWS "Userdata".'
+    )
+    parser.add_option(
+        '--dry-run', '-D',
+        action='store_true', default=DEFAULT['dry_run'],
+        dest='dry_run',
+        help='Dry run flag.'
     )
     parser.add_option(
         '--log-level', '-L',
@@ -197,6 +208,35 @@ def validate_options(options):
         raise EC2MoreLikeThisException(
             '"--aws-secret-access-key" option is required.'
         )
+
+
+def convert_options(options):
+
+    if options.override_ebs_optimize is not None:
+        if options.override_ebs_optimize.lower() == 'true':
+            options.override_ebs_optimize = True
+        elif options.override_ebs_optimize.lower() == 'false':
+            options.override_ebs_optimize = False
+        else:
+            raise EC2MoreLikeThisException(
+                (
+                    '"--override-ebs-optimize" option must be '
+                    '"true" or "false"'
+                )
+            )
+
+    if options.override_terminate_protection is not None:
+        if options.override_terminate_protection.lower() == 'true':
+            options.override_terminate_protection = True
+        elif options.override_terminate_protection.lower() == 'false':
+            options.override_terminate_protection = False
+        else:
+            raise EC2MoreLikeThisException(
+                (
+                    '"--override-terminate-protection" option must be '
+                    '"true" or "false"'
+                )
+            )
 
 def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
 
