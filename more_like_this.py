@@ -5,6 +5,7 @@ import logging
 import optparse
 
 import boto.ec2
+import boto.ec2.image
 import boto.exception
 
 
@@ -24,6 +25,10 @@ DEFAULT = {
     'override_public_ip': None,
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
+    'override_ebs_size': None,
+    'override_ebs_device': None,
+    'override_ebs_type': None,
+    'override_ebs_iops': None,
     'userdata': None,
     'log_level': 'INFO',
     'dry_run': False,
@@ -62,30 +67,30 @@ def get_args():
     )
     parser.add_option_group(aws_credential_option_group)
 
-    override_option_group = optparse.OptionGroup(
+    override_ec2_option_group = optparse.OptionGroup(
         parser,
         'Override Instance Options'
     )
 
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-ami-id', '-a',
         type='string', default=DEFAULT['override_ami_id'],
         dest='override_ami_id',
         help='When you want to override new instance AMI, use this option.'
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-sg-id', '-s',
         type='string', default=DEFAULT['override_sg_ids'],
         dest='override_sg_id',
         help='when you want to override new instance sgs, use this option.'
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-subnet', '-c',
         type='string', default=DEFAULT['override_subnet'],
         dest='override_subnet',
         help='when you want to override new instance subnet, use this option.'
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-ebs-optimize', '-e',
         type='string', default=DEFAULT['override_ebs_optimize'],
         dest='override_ebs_optimize',
@@ -94,7 +99,7 @@ def get_args():
             'use this option.'
         )
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-instance-type', '-t',
         type='string', default=DEFAULT['override_instance_type'],
         dest='override_instance_type',
@@ -103,7 +108,7 @@ def get_args():
             'use this option.'
         )
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-private-ip', '-x',
         type='string', default=DEFAULT['override_private_ip'],
         dest='override_private_ip',
@@ -112,7 +117,7 @@ def get_args():
             'use this option.'
         )
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-public-ip', '-y',
         type='string', default=DEFAULT['override_public_ip'],
         dest='override_instance_type',
@@ -121,7 +126,7 @@ def get_args():
             'use this option.'
         )
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-terminate-protection', '-d',
         type='string', default=DEFAULT['override_terminate_protection'],
         dest='override_terminate_protection',
@@ -131,7 +136,7 @@ def get_args():
             'use this option.'
         )
     )
-    override_option_group.add_option(
+    override_ec2_option_group.add_option(
         '--override-shutdown-behavior', '-b',
         type='choice', default=DEFAULT['override_shutdown_behavior'],
         choices=[
@@ -144,7 +149,53 @@ def get_args():
             'use this option.'
         )
     )
-    parser.add_option_group(override_option_group)
+    parser.add_option_group(override_ec2_option_group)
+
+    override_ebs_option_group = optparse.OptionGroup(
+        parser,
+        'Override EBS Options'
+    )
+    override_ebs_option_group.add_option(
+        '--override-ebs-size', '-v',
+        type='int', default=DEFAULT['override_ebs_size'],
+        dest='override_ebs_size',
+        help=(
+            'When you want to override EBS size, '
+            'use this option. Unit of this option is GB.'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-ebs-device', '-g',
+        type='string', default=DEFAULT['override_ebs_device'],
+        dest='override_ebs_device',
+        help=(
+            'When you want to override EBS attached device, '
+            'use this option. e.x: /dev/xvdb1'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-ebs-type', '-f',
+        type='choice', default=DEFAULT['override_ebs_device'],
+        choices=[
+            'standard',
+            'consistent-iops'
+        ],
+        dest='override_ebs_type',
+        help=(
+            'When you want to override EBS type, '
+            'use this option.'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-ebs-iops', '-o',
+        type='int', default=DEFAULT['override_ebs_iops'],
+        dest='override_ebs_iops',
+        help=(
+            'When you want to override EBS type, '
+            'use this option.'
+        )
+    )
+    parser.add_option_group(override_ebs_option_group)
 
     parser.add_option(
         '--base-ec2-name', '-N',
@@ -196,6 +247,13 @@ class EC2MoreLikeThisException(BaseException):
 
     def __init__(self, message):
         super(EC2MoreLikeThisException, self).__init__(message)
+
+
+def set_log_level(log_level='DEBUG'):
+    logging.basicConfig(
+        format='[%(levelname)s] %(message)s',
+        level=getattr(logging, log_level)
+    )
 
 
 def validate_options(options):
@@ -278,15 +336,25 @@ def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
         raise EC2MoreLikeThisException(
             'Maybe failed to AWS authentication.'
         )
-    conn.get_all_instances()
+    conn.get_all_images
 
     return conn
 
 
 def get_base_ec2_instance(conn,
-                          hostname=None,
                           base_ec2_hostname=None,
                           base_ec2_id=None):
+    """
+    Get EC2 instance by Name tag or instance id.
+    :param conn: EC2 connection
+    :type conn: boto.ec2.EC2Connection
+    :param base_ec2_hostname: Name tag of based ec2 instance
+    :type base_ec2_hostname: str
+    :param base_ec2_id: Instance id of based ec2 instance
+    :type base_ec2_id: str
+    :rtype: list
+    :return: EC2 Reservation
+    """
 
     if not base_ec2_hostname and not base_ec2_id:
         raise EC2MoreLikeThisException(
@@ -303,6 +371,9 @@ def get_base_ec2_instance(conn,
                     'tag:Name': base_ec2_hostname
                 }
             )
+            logging.debug(
+                'Base instance is {0}.'.format(result)
+            )
             return result
         except boto.exception.EC2ResponseError as exception:
             raise EC2MoreLikeThisException(
@@ -311,11 +382,25 @@ def get_base_ec2_instance(conn,
     elif base_ec2_id:
         try:
             result = conn.get_all_instances(instance_ids=[base_ec2_id])
+            logging.debug(
+                'Base instance is {0}.'.format(result)
+            )
             return result
         except boto.exception.EC2ResponseError as exception:
             raise EC2MoreLikeThisException(
                 exception.__str__()
             )
+
+
+def get_ami(conn, ami_id):
+
+    try:
+        result = conn.get_all_images(image_ids=[ami_id])
+        return result
+    except boto.exception.EC2ResponseError as exception:
+        raise EC2MoreLikeThisException(
+            exception.__str__()
+        )
 
 
 if __name__ == '__main__':

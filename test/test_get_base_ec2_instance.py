@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import boto.ec2.instance
 import moto
 import nose.tools
 
@@ -22,8 +23,8 @@ class TestFailGetBaseEC2Instance(object):
     def test_no_both_hostname_and_id(self):
         more_like_this.get_base_ec2_instance(
             conn=self.conn,
-            base_ec2_hostname=None,
-            base_ec2_id=None
+            base_ec2_hostname='',
+            base_ec2_id=''
         )
 
     @moto.mock_ec2
@@ -63,8 +64,8 @@ class TestGetBaseEC2InstanceById(object):
             conn=self.conn,
             base_ec2_id=instance_id
         )
-        nose.tools.eq_(
-            len(result), 1
+        nose.tools.ok_(
+            isinstance(result[0], boto.ec2.instance.Reservation)
         )
 
     @moto.mock_ec2
