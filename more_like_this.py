@@ -297,7 +297,17 @@ def get_base_ec2_instance(conn,
             '"base_ec2_hostname" and "base_ec2_id" arguments are exclusive.'
         )
     elif base_ec2_hostname:
-        pass
+        try:
+            result = conn.get_all_instances(
+                filters={
+                    'tag:Name': base_ec2_hostname
+                }
+            )
+            return result
+        except boto.exception.EC2ResponseError as exception:
+            raise EC2MoreLikeThisException(
+                exception.__str__()
+            )
     elif base_ec2_id:
         try:
             result = conn.get_all_instances(instance_ids=[base_ec2_id])
