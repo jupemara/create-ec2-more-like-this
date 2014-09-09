@@ -5,6 +5,7 @@ import logging
 import optparse
 
 import boto.ec2
+import boto.exception
 
 
 DEFAULT = {
@@ -199,14 +200,23 @@ class EC2MoreLikeThisException(BaseException):
 
 def validate_options(options):
 
-    if options.aws_access_key_id is None:
+    if not options.aws_access_key_id:
         raise EC2MoreLikeThisException(
             '"--aws-access-key-id" option is required.'
         )
 
-    if options.aws_secret_access_key is None:
+    if not options.aws_secret_access_key:
         raise EC2MoreLikeThisException(
             '"--aws-secret-access-key" option is required.'
+        )
+
+    if (
+        not options.base_ec2_hostname and
+        not options.base_ec2_id
+    ):
+        raise EC2MoreLikeThisException(
+            '"--base-ec2-hostname" or "--base-ec2-id"'
+            'specify any.'
         )
 
 
@@ -238,6 +248,19 @@ def convert_options(options):
                 )
             )
 
+    if options.override_public_ip is not None:
+        if options.override_public_ip.lower() == 'true':
+            options.override_public_ip = True
+        elif options.override_public_ip.lower() == 'false':
+            options.override_public_ip = False
+        else:
+            raise EC2MoreLikeThisException(
+                (
+                    '"--override-public-ip" option must be '
+                    '"true" or "false"'
+                )
+            )
+
 def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
 
     try:
@@ -255,8 +278,34 @@ def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
         raise EC2MoreLikeThisException(
             'Maybe failed to AWS authentication.'
         )
+    conn.get_all_instances()
 
     return conn
+
+
+def get_base_ec2_instance(conn,
+                          hostname=None,
+                          base_ec2_hostname=None,
+                          base_ec2_id=None):
+
+    if not base_ec2_hostname and not base_ec2_id:
+        raise EC2MoreLikeThisException(
+            '"base_ec2_hostname" or "base_ec2_id" argument is required.'
+        )
+    elif base_ec2_hostname and base_ec2_id:
+        raise EC2MoreLikeThisException(
+            '"base_ec2_hostname" and "base_ec2_id" arguments are exclusive.'
+        )
+    elif base_ec2_hostname:
+        pass
+    elif base_ec2_id:
+        try:
+            result = conn.get_all_instances(instance_ids=[base_ec2_id])
+            return result
+        except boto.exception.EC2ResponseError as exception:
+            raise EC2MoreLikeThisException(
+                exception.__str__()
+            )
 
 
 if __name__ == '__main__':
