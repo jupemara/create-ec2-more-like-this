@@ -10,6 +10,7 @@ import more_like_this
 
 class TestGetAMI(object):
 
+    @moto.mock_ec2
     def setup(self):
         self.conn = more_like_this.create_conn(
             region_name='us-east-1',

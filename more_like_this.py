@@ -3,6 +3,7 @@
 
 import logging
 import optparse
+import time
 
 import boto.ec2
 import boto.ec2.image
@@ -18,11 +19,9 @@ DEFAULT = {
     'hostname': None,
     'override_ami_id': None,
     'override_sg_ids': None,
-    'override_subnet': None,
-    'override_ebs_optimize': None,
+    'override_subnet_id': None,
     'override_instance_type': None,
     'override_private_ip': None,
-    'override_public_ip': None,
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
     'override_ebs_size': None,
@@ -79,25 +78,20 @@ def get_args():
         help='When you want to override new instance AMI, use this option.'
     )
     override_ec2_option_group.add_option(
-        '--override-sg-id', '-s',
+        '--override-sg-ids', '-s',
         type='string', default=DEFAULT['override_sg_ids'],
-        dest='override_sg_id',
-        help='when you want to override new instance sgs, use this option.'
-    )
-    override_ec2_option_group.add_option(
-        '--override-subnet', '-c',
-        type='string', default=DEFAULT['override_subnet'],
-        dest='override_subnet',
-        help='when you want to override new instance subnet, use this option.'
-    )
-    override_ec2_option_group.add_option(
-        '--override-ebs-optimize', '-e',
-        type='string', default=DEFAULT['override_ebs_optimize'],
-        dest='override_ebs_optimize',
+        dest='override_sg_ids',
         help=(
-            'when you want to override new instance ebs optimize option, '
-            'use this option.'
+            'When you want to override new instance security groups, '
+            'use this option. '
+            'Use comma as delimiter.'
         )
+    )
+    override_ec2_option_group.add_option(
+        '--override-subnet-id', '-c',
+        type='string', default=DEFAULT['override_subnet_id'],
+        dest='override_subnet_id',
+        help='when you want to override new instance subnet, use this option.'
     )
     override_ec2_option_group.add_option(
         '--override-instance-type', '-t',
@@ -114,15 +108,6 @@ def get_args():
         dest='override_private_ip',
         help=(
             'when you want to override new instance private IP address, '
-            'use this option.'
-        )
-    )
-    override_ec2_option_group.add_option(
-        '--override-public-ip', '-y',
-        type='string', default=DEFAULT['override_public_ip'],
-        dest='override_instance_type',
-        help=(
-            'when you want to override new instance public IP option, '
             'use this option.'
         )
     )
@@ -212,7 +197,7 @@ def get_args():
     parser.add_option(
         '--hostname', '-H',
         type='string', default=DEFAULT['hostname'],
-        help='New EC2 instance hostname.'
+        help='New EC2 instance hostname(Name Tag).'
     )
     parser.add_option(
         '--userdata', '-U',
@@ -280,20 +265,7 @@ def validate_options(options):
 
 def convert_options(options):
 
-    if options.override_ebs_optimize is not None:
-        if options.override_ebs_optimize.lower() == 'true':
-            options.override_ebs_optimize = True
-        elif options.override_ebs_optimize.lower() == 'false':
-            options.override_ebs_optimize = False
-        else:
-            raise EC2MoreLikeThisException(
-                (
-                    '"--override-ebs-optimize" option must be '
-                    '"true" or "false"'
-                )
-            )
-
-    if options.override_terminate_protection is not None:
+    if options.override_terminate_protection:
         if options.override_terminate_protection.lower() == 'true':
             options.override_terminate_protection = True
         elif options.override_terminate_protection.lower() == 'false':
@@ -306,18 +278,16 @@ def convert_options(options):
                 )
             )
 
-    if options.override_public_ip is not None:
-        if options.override_public_ip.lower() == 'true':
-            options.override_public_ip = True
-        elif options.override_public_ip.lower() == 'false':
-            options.override_public_ip = False
-        else:
+    if options.override_sg_ids:
+        try:
+            options.override_sg_ids = [
+                entry.strip() for entry in options.override_sg_ids.split(',')
+            ]
+        except:
             raise EC2MoreLikeThisException(
-                (
-                    '"--override-public-ip" option must be '
-                    '"true" or "false"'
-                )
+                '--override-sg-ids option must be separated by comma.'
             )
+
 
 def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
 
@@ -336,7 +306,6 @@ def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
         raise EC2MoreLikeThisException(
             'Maybe failed to AWS authentication.'
         )
-    conn.get_all_images
 
     return conn
 
@@ -401,6 +370,120 @@ def get_ami(conn, ami_id):
         raise EC2MoreLikeThisException(
             exception.__str__()
         )
+
+
+class MoreLikeThisEC2Instance(object):
+
+    def __init__(self):
+        self.conn = None
+        self.base_ec2_instance = None
+        self.base_block_device_mapping = None
+        self.ec2_attributes = dict()
+        self.ec2_tags = dict()
+        self.device_mapping = dict()
+        self.base_image = None
+
+    def set_base_ec2_instance(self, ec2_instance):
+        self.base_ec2_instance = ec2_instance
+
+        self.ec2_attributes['key_name'] = self.base_ec2_instance.key_name
+        self.ec2_attributes['security_group_ids'] = (
+            self.base_ec2_instance.groups
+        )
+        self.ec2_attributes['subnet_id'] = self.base_ec2_instance.subnet_id
+        self.ec2_attributes['instance_type'] = (
+            self.base_ec2_instance.instance_type
+        )
+        try:
+            self.ec2_attributes['disable_api_termination'] = (
+                self.base_ec2_instance.get_attribute(
+                    'disableApiTermination'
+                ).get('disableApiTermination', False)
+            )
+        except AttributeError:
+            logging.warn(
+                'Instance doesn\'t have "disableApiTermination" attribute.'
+            )
+        try:
+            self.ec2_attributes['instance_initiated_shutdown_behavior'] = (
+                self.base_ec2_instance.get_attribute(
+                    'instanceInitiatedShutdownBehavior'
+                ).get('instanceInitiatedShutdownBehavior', 'stop')
+            )
+        except AttributeError:
+            logging.warn(
+                'Instance doesn\'t have '
+                '"instanceInitiatedShutdownBehavior" attribute.'
+            )
+        self.ec2_tags = self.base_ec2_instance.tags
+
+    def set_base_block_device_mapping(self, block_device_mapping):
+        self.base_block_device_mapping = block_device_mapping
+
+    def set_ec2_connection(self, conn):
+        self.conn = conn
+
+    def set_base_image(self, base_image):
+        self.base_image = base_image
+
+    def apply_ec2_option(self, name, value):
+        if value and name in self.ec2_attributes.keys():
+            self.ec2_attributes[name] = value
+        else:
+            raise EC2MoreLikeThisException(
+                'EC2 instance has no attributes {0}'.format(name)
+            )
+
+        if len(self.base_block_device_mapping.keys()) > 2:
+            raise NotImplementedError(
+                (
+                    'Sorry!! We haven\'t implement "Launch more like this" '
+                    'to ec2 instance that has EBSs more than two.'
+                )
+            )
+
+    def apply_ec2_hostname(self, hostname):
+        self.ec2_tags['Name'] = hostname
+
+    def run(self,
+            wait_until_running=True,
+            checking_state_term=5,
+            checking_count_threshold=12,
+            dry_run=False):
+        run_params = self.ec2_attributes.copy()
+        run_params['dry_run'] = dry_run
+        reservation = self.base_image.run(
+            **run_params
+        )
+        instance = reservation.instances[0]
+        if self.ec2_tags:
+            instance.add_tags(self.ec2_tags)
+        else:
+            logging.info(
+                'You specify no tags for new EC2 instance.'
+            )
+
+        #attach_ebs
+
+
+        if wait_until_running:
+            pending_count = 0
+            while instance.state.lower() == 'pending':
+                logging.info(
+                    'Created instance state is "pending"'
+                )
+                time.sleep(checking_state_term)
+                pending_count += 1
+
+                if pending_count > checking_count_threshold:
+                    logging.warn(
+                        'Checking instance state timeout.'
+                    )
+                    break
+            return instance
+
+        else:
+            return instance
 
 
 if __name__ == '__main__':
