@@ -48,7 +48,7 @@ class TestGetAMI(object):
         )
 
         nose.tools.ok_(
-            isinstance(images[0], boto.ec2.image.Image)
+            isinstance(images, boto.ec2.image.Image)
         )
 
 

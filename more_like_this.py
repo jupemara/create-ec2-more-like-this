@@ -15,7 +15,7 @@ DEFAULT = {
     'region_name': 'us-east-1',
     'aws_access_key_id': None,
     'aws_secret_access_key': None,
-    'base_ec2_hostname': None,
+    'base_ec2_name': None,
     'base_ec2_id': None,
     'hostname': None,
     'override_ami_id': None,
@@ -26,7 +26,6 @@ DEFAULT = {
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
     'override_root_ebs_size': None,
-    'override_root_ebs_device': None,
     'override_root_ebs_type': None,
     'override_root_ebs_iops': None,
     'override_optional_ebs_size': None,
@@ -155,15 +154,6 @@ def get_args():
         )
     )
     override_ebs_option_group.add_option(
-        '--override-root-ebs-device', '-g',
-        type='string', default=DEFAULT['override_root_ebs_device'],
-        dest='override_root_ebs_device',
-        help=(
-            'When you want to override root EBS attached device, '
-            'use this option. e.x: /dev/sda'
-        )
-    )
-    override_ebs_option_group.add_option(
         '--override-root-ebs-type', '-f',
         type='choice', default=DEFAULT['override_root_ebs_type'],
         choices=[
@@ -229,9 +219,9 @@ def get_args():
 
     parser.add_option(
         '--base-ec2-name', '-N',
-        type='string', default=DEFAULT['base_ec2_hostname'],
+        type='string', default=DEFAULT['base_ec2_name'],
         dest='base_ec2_name',
-        help='Based EC2 instance hostname.'
+        help='Based EC2 instance "Name" tag.'
     )
     parser.add_option(
         '--base-ec2-id', '-I',
@@ -299,11 +289,11 @@ def validate_options(options):
         )
 
     if (
-        not options.base_ec2_hostname and
+        not options.base_ec2_name and
         not options.base_ec2_id
     ):
         raise EC2MoreLikeThisException(
-            '"--base-ec2-hostname" or "--base-ec2-id"'
+            '"--base-ec2-name" or "--base-ec2-id"'
             'specify any.'
         )
 
@@ -333,6 +323,8 @@ def convert_options(options):
                 '--override-sg-ids option must be separated by comma.'
             )
 
+    return options
+
 
 def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
 
@@ -355,51 +347,90 @@ def create_conn(region_name, aws_access_key_id, aws_secret_access_key):
     return conn
 
 
+def verify_ec2_instance_by_name(conn, name):
+    reservations = conn.get_all_instances(
+        filters={'tag:Name': name}
+    )
+    if len(reservations) > 0:
+        raise EC2MoreLikeThisException(
+            'Specified instance name {0} is already used.'.format(name)
+        )
+    return True
+
+
+def verify_ec2_instance_by_private_ip(conn, private_ip_address):
+    all_nics = conn.get_all_network_interfaces()
+    all_private_ips = [
+        entry.private_ip_address for entry in all_nics
+    ]
+    if private_ip_address in all_private_ips:
+        raise EC2MoreLikeThisException(
+            'Specified private IP {0} is already used.'
+            ''.format(private_ip_address)
+        )
+    return True
+
+
 def get_base_ec2_instance(conn,
-                          base_ec2_hostname=None,
+                          base_ec2_name=None,
                           base_ec2_id=None):
     """
     Get EC2 instance by Name tag or instance id.
     :param conn: EC2 connection
     :type conn: boto.ec2.EC2Connection
-    :param base_ec2_hostname: Name tag of based ec2 instance
-    :type base_ec2_hostname: str
+    :param base_ec2_name: Name tag of based ec2 instance
+    :type base_ec2_name: str
     :param base_ec2_id: Instance id of based ec2 instance
     :type base_ec2_id: str
     :rtype: list
     :return: EC2 Reservation
     """
 
-    if not base_ec2_hostname and not base_ec2_id:
+    if not base_ec2_name and not base_ec2_id:
         raise EC2MoreLikeThisException(
-            '"base_ec2_hostname" or "base_ec2_id" argument is required.'
+            '"base_ec2_name" or "base_ec2_id" argument is required.'
         )
-    elif base_ec2_hostname and base_ec2_id:
+    elif base_ec2_name and base_ec2_id:
         raise EC2MoreLikeThisException(
-            '"base_ec2_hostname" and "base_ec2_id" arguments are exclusive.'
+            '"base_ec2_name" and "base_ec2_id" arguments are exclusive.'
         )
-    elif base_ec2_hostname:
+    elif base_ec2_name:
         try:
-            result = conn.get_all_instances(
+            reservations = conn.get_all_instances(
                 filters={
-                    'tag:Name': base_ec2_hostname
+                    'tag:Name': base_ec2_name
                 }
             )
+            instances = reservations[0].instances
+            if len(instances) > 1:
+                raise EC2MoreLikeThisException(
+                    'Found more then two instances...'
+                )
+            elif len(instances) <= 0:
+                raise EC2MoreLikeThisException(
+                    'Instance which has "{0}" as "Name" tag does not exist...'
+                    ''.format(base_ec2_name)
+                )
             logging.debug(
-                'Base instance is {0}.'.format(result)
+                'Base instance is {0}.'.format(instances)
             )
-            return result
+            return instances[0]
         except boto.exception.EC2ResponseError as exception:
             raise EC2MoreLikeThisException(
                 exception.__str__()
             )
     elif base_ec2_id:
         try:
-            result = conn.get_all_instances(instance_ids=[base_ec2_id])
+            reservations = conn.get_all_instances(instance_ids=[base_ec2_id])
+            instances = reservations[0].instances
+            if len(instances) <= 0:
+                raise EC2MoreLikeThisException(
+                    'Instance ID: {0} does not exist...'.format(base_ec2_id)
+                )
             logging.debug(
-                'Base instance is {0}.'.format(result)
+                'Base instance is {0}.'.format(instances)
             )
-            return result
+            return instances[0]
         except boto.exception.EC2ResponseError as exception:
             raise EC2MoreLikeThisException(
                 exception.__str__()
@@ -410,7 +441,7 @@ def get_ami(conn, ami_id):
 
     try:
         result = conn.get_all_images(image_ids=[ami_id])
-        return result
+        return result[0]
     except boto.exception.EC2ResponseError as exception:
         raise EC2MoreLikeThisException(
             exception.__str__()
@@ -436,7 +467,9 @@ class MoreLikeThisEC2Instance(object):
 
         self.ec2_attributes['key_name'] = self.base_ec2_instance.key_name
         self.ec2_attributes['security_group_ids'] = (
-            self.base_ec2_instance.groups
+            [
+                entry.id for entry in self.base_ec2_instance.groups
+            ]
         )
         self.ec2_attributes['subnet_id'] = self.base_ec2_instance.subnet_id
         self.ec2_attributes['instance_type'] = (
@@ -468,10 +501,14 @@ class MoreLikeThisEC2Instance(object):
     def set_base_block_device_mapping(self, block_device_mapping):
         self.base_block_device_mapping = block_device_mapping
         for key, value in self.base_block_device_mapping.items():
+            volume = self.conn.get_all_volumes(
+                volume_ids=value.volume_id
+            )[0]
             self.device_mapping[key] = dict(
-                size=value.size,
-                volume_type=value.volume_type,
-                iops=value.iops
+                size=volume.size,
+                volume_type=volume.type,
+                iops=volume.iops,
+                encrypted=volume.encrypted
             )
 
     def set_base_image(self, base_image):
@@ -496,7 +533,7 @@ class MoreLikeThisEC2Instance(object):
     def apply_ec2_hostname(self, hostname):
         self.ec2_tags['Name'] = hostname
 
-    def apply_ebs_option(self, device, name, value):
+    def apply_ebs_option(self, name, value, device='/dev/sda1'):
         if device in self.device_mapping.keys():
             self.device_mapping[device][name] = value
         else:
@@ -513,34 +550,12 @@ class MoreLikeThisEC2Instance(object):
             block_device_mapping[key] = (
                 boto.ec2.blockdevicemapping.BlockDeviceType(
                     connection=self.conn,
-                    size=value.get('size'),
-                    volume_type=value.get('volume_type'),
-                    iops=value.get('iops')
+                    size=value['size'],
+                    volume_type=value['volume_type'],
+                    iops=value['iops']
                 )
             )
         return block_device_mapping
-
-    def verify_ec2_instance_by_name(self, name):
-        reservations = self.conn.get_all_instances(
-            filters={'tag:Name': name}
-        )
-        if len(reservations[0].instances) > 0:
-            raise EC2MoreLikeThisException(
-                'Specified instance name {0} is already used.'.format(name)
-            )
-        return True
-
-    def verify_ec2_instance_by_private_ip(self, private_ip_address):
-        all_nics = self.conn.get_all_network_interfaces()
-        all_private_ips = [
-            entry.private_ip_address for entry in all_nics
-        ]
-        if private_ip_address in all_private_ips:
-            raise EC2MoreLikeThisException(
-                'Specified private IP {0} is already used.'
-                ''.format(private_ip_address)
-            )
-        return True
 
     def run(self,
             wait_until_running=True,
@@ -549,7 +564,7 @@ class MoreLikeThisEC2Instance(object):
             dry_run=False):
         run_params = self.ec2_attributes.copy()
         run_params['dry_run'] = dry_run
-        run_params['block_device_mapping'] = self.construct_device_mapping(
+        run_params['block_device_map'] = self.construct_device_mapping(
             self.device_mapping
         )
         reservation = self.base_image.run(
@@ -568,7 +583,10 @@ class MoreLikeThisEC2Instance(object):
 
         if wait_until_running:
             pending_count = 0
-            while instance.state.lower() == 'pending':
+            while (
+                self.conn.get_all_instance_status(instance.id)[0].lower() ==
+                'pending'
+            ):
                 logging.info(
                     'Created instance state is "pending"'
                 )
@@ -586,5 +604,65 @@ class MoreLikeThisEC2Instance(object):
             return instance
 
 
+def main():
+    options = get_args()
+    validate_options(options)
+    options = convert_options(options=options)
+    set_log_level(log_level=options.log_level)
+
+    conn = create_conn(
+        region_name=options.region_name,
+        aws_access_key_id=options.aws_access_key_id,
+        aws_secret_access_key=options.aws_secret_access_key
+    )
+    if options.hostname:
+        verify_ec2_instance_by_name(
+            conn=conn,
+            name=options.hostname
+        )
+    if options.override_private_ip:
+        verify_ec2_instance_by_private_ip(
+            conn=conn,
+            private_ip_address=options.override_private_ip
+        )
+    if options.base_ec2_name:
+        base_ec2_instance = get_base_ec2_instance(
+            conn=conn,
+            base_ec2_name=options.base_ec2_name
+        )
+    else:
+        base_ec2_instance = get_base_ec2_instance(
+            conn=conn,
+            base_ec2_id=options.base_ec2_id
+        )
+    base_image = get_ami(
+        conn=conn,
+        ami_id=base_ec2_instance.image_id
+    )
+    more_like_this_ec2 = MoreLikeThisEC2Instance(
+        conn=conn
+    )
+    more_like_this_ec2.set_base_ec2_instance(
+        ec2_instance=base_ec2_instance
+    )
+    more_like_this_ec2.set_base_block_device_mapping(
+        base_ec2_instance.block_device_mapping
+    )
+    more_like_this_ec2.set_base_image(
+        base_image=base_image
+    )
+    # apply override options
+    if options.hostname:
+        more_like_this_ec2.apply_ec2_hostname(
+            hostname=options.hostname
+        )
+
+    instance = more_like_this_ec2.run(
+        checking_state_term=10,
+        checking_count_threshold=60,
+        dry_run=options.dry_run
+    )
+
+
 if __name__ == '__main__':
-    get_args()
+    main()

@@ -23,7 +23,7 @@ class TestFailGetBaseEC2Instance(object):
     def test_no_both_hostname_and_id(self):
         more_like_this.get_base_ec2_instance(
             conn=self.conn,
-            base_ec2_hostname='',
+            base_ec2_name='',
             base_ec2_id=''
         )
 
@@ -32,7 +32,7 @@ class TestFailGetBaseEC2Instance(object):
     def test_both_hostname_and_id(self):
         more_like_this.get_base_ec2_instance(
             conn=self.conn,
-            base_ec2_hostname='HOGEHOGE',
+            base_ec2_name='HOGEHOGE',
             base_ec2_id='HOGEHOGE'
         )
 
@@ -65,7 +65,7 @@ class TestGetBaseEC2InstanceById(object):
             base_ec2_id=instance_id
         )
         nose.tools.ok_(
-            isinstance(result[0], boto.ec2.instance.Reservation)
+            isinstance(result, boto.ec2.instance.Instance)
         )
 
     @moto.mock_ec2
