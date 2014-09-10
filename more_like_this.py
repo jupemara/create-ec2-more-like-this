@@ -549,6 +549,9 @@ class MoreLikeThisEC2Instance(object):
             dry_run=False):
         run_params = self.ec2_attributes.copy()
         run_params['dry_run'] = dry_run
+        run_params['block_device_mapping'] = self.construct_device_mapping(
+            self.device_mapping
+        )
         reservation = self.base_image.run(
             **run_params
         )
