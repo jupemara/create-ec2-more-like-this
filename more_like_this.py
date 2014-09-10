@@ -6,6 +6,7 @@ import optparse
 import time
 
 import boto.ec2
+import boto.ec2.blockdevicemapping
 import boto.ec2.image
 import boto.exception
 
@@ -24,10 +25,14 @@ DEFAULT = {
     'override_private_ip': None,
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
-    'override_ebs_size': None,
-    'override_ebs_device': None,
-    'override_ebs_type': None,
-    'override_ebs_iops': None,
+    'override_root_ebs_size': None,
+    'override_root_ebs_device': None,
+    'override_root_ebs_type': None,
+    'override_root_ebs_iops': None,
+    'override_optional_ebs_size': None,
+    'override_optional_ebs_device': None,
+    'override_optional_ebs_type': None,
+    'override_optional_ebs_iops': None,
     'userdata': None,
     'log_level': 'INFO',
     'dry_run': False,
@@ -141,42 +146,82 @@ def get_args():
         'Override EBS Options'
     )
     override_ebs_option_group.add_option(
-        '--override-ebs-size', '-v',
-        type='int', default=DEFAULT['override_ebs_size'],
-        dest='override_ebs_size',
+        '--override-root-ebs-size', '-v',
+        type='int', default=DEFAULT['override_root_ebs_size'],
+        dest='override_root_ebs_size',
         help=(
-            'When you want to override EBS size, '
+            'When you want to override root EBS volume size, '
             'use this option. Unit of this option is GB.'
         )
     )
     override_ebs_option_group.add_option(
-        '--override-ebs-device', '-g',
-        type='string', default=DEFAULT['override_ebs_device'],
-        dest='override_ebs_device',
+        '--override-root-ebs-device', '-g',
+        type='string', default=DEFAULT['override_root_ebs_device'],
+        dest='override_root_ebs_device',
         help=(
-            'When you want to override EBS attached device, '
-            'use this option. e.x: /dev/xvdb1'
+            'When you want to override root EBS attached device, '
+            'use this option. e.x: /dev/sda'
         )
     )
     override_ebs_option_group.add_option(
-        '--override-ebs-type', '-f',
-        type='choice', default=DEFAULT['override_ebs_device'],
+        '--override-root-ebs-type', '-f',
+        type='choice', default=DEFAULT['override_root_ebs_type'],
         choices=[
             'standard',
             'consistent-iops'
         ],
-        dest='override_ebs_type',
+        dest='override_root_ebs_type',
         help=(
-            'When you want to override EBS type, '
+            'When you want to override root EBS volume type, '
             'use this option.'
         )
     )
     override_ebs_option_group.add_option(
-        '--override-ebs-iops', '-o',
-        type='int', default=DEFAULT['override_ebs_iops'],
-        dest='override_ebs_iops',
+        '--override-root-ebs-iops', '-o',
+        type='int', default=DEFAULT['override_root_ebs_iops'],
+        dest='override_root_ebs_iops',
         help=(
-            'When you want to override EBS type, '
+            'When you want to override root EBS iops, '
+            'use this option.'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-optional-ebs-size', '-V',
+        type='int', default=DEFAULT['override_optional_ebs_size'],
+        dest='override_optional_ebs_size',
+        help=(
+            'When you want to override optional EBS size, '
+            'use this option. Unit of this option is GB.'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-optional-ebs-device', '-G',
+        type='string', default=DEFAULT['override_optional_ebs_device'],
+        dest='override_optional_ebs_device',
+        help=(
+            'When you want to override optional EBS attached device, '
+            'use this option. e.x: /dev/sdb'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-optional-ebs-type', '-F',
+        type='choice', default=DEFAULT['override_optional_ebs_type'],
+        choices=[
+            'standard',
+            'consistent-iops'
+        ],
+        dest='override_optional_ebs_type',
+        help=(
+            'When you want to override optional EBS volume type, '
+            'use this option.'
+        )
+    )
+    override_ebs_option_group.add_option(
+        '--override-optional-ebs-iops', '-O',
+        type='int', default=DEFAULT['override_optional_ebs_iops'],
+        dest='override_optional_ebs_iops',
+        help=(
+            'When you want to override optional EBS iops, '
             'use this option.'
         )
     )
@@ -374,14 +419,17 @@ def get_ami(conn, ami_id):
 
 class MoreLikeThisEC2Instance(object):
 
-    def __init__(self):
-        self.conn = None
+    def __init__(self, conn=None):
+        self.conn = conn
         self.base_ec2_instance = None
         self.base_block_device_mapping = None
         self.ec2_attributes = dict()
         self.ec2_tags = dict()
         self.device_mapping = dict()
         self.base_image = None
+
+    def set_ec2_connection(self, conn):
+        self.conn = conn
 
     def set_base_ec2_instance(self, ec2_instance):
         self.base_ec2_instance = ec2_instance
@@ -419,9 +467,12 @@ class MoreLikeThisEC2Instance(object):
 
     def set_base_block_device_mapping(self, block_device_mapping):
         self.base_block_device_mapping = block_device_mapping
-
-    def set_ec2_connection(self, conn):
-        self.conn = conn
+        for key, value in self.base_block_device_mapping.items():
+            self.device_mapping[key] = dict(
+                size=value.size,
+                volume_type=value.volume_type,
+                iops=value.iops
+            )
 
     def set_base_image(self, base_image):
         self.base_image = base_image
@@ -444,6 +495,30 @@ class MoreLikeThisEC2Instance(object):
 
     def apply_ec2_hostname(self, hostname):
         self.ec2_tags['Name'] = hostname
+
+    def apply_ebs_option(self, device, name, value):
+        if device in self.device_mapping.keys():
+            self.device_mapping[device][name] = value
+        else:
+            raise EC2MoreLikeThisException(
+                'Seems to no device {0}, cannot override parameters.'
+                ''.format(device)
+            )
+
+    def construct_device_mapping(self, raw_options):
+        block_device_mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping(
+            connection=self.conn
+        )
+        for key, value in raw_options.items():
+            block_device_mapping[key] = (
+                boto.ec2.blockdevicemapping.BlockDeviceType(
+                    connection=self.conn,
+                    size=value.get('size'),
+                    volume_type=value.get('volume_type'),
+                    iops=value.get('iops')
+                )
+            )
+        return block_device_mapping
 
     def verify_ec2_instance_by_name(self, name):
         reservations = self.conn.get_all_instances(
@@ -480,13 +555,13 @@ class MoreLikeThisEC2Instance(object):
         instance = reservation.instances[0]
         if self.ec2_tags:
             instance.add_tags(self.ec2_tags)
+            logging.debug(
+                'Set following tags: {0}'.format(self.ec2_tags)
+            )
         else:
-            logging.info(
+            logging.debug(
                 'You specify no tags for new EC2 instance.'
             )
-
-        #attach_ebs
-
 
         if wait_until_running:
             pending_count = 0
