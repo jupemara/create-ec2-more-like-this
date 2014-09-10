@@ -445,6 +445,28 @@ class MoreLikeThisEC2Instance(object):
     def apply_ec2_hostname(self, hostname):
         self.ec2_tags['Name'] = hostname
 
+    def verify_ec2_instance_by_name(self, name):
+        reservations = self.conn.get_all_instances(
+            filters={'tag:Name': name}
+        )
+        if len(reservations[0].instances) > 0:
+            raise EC2MoreLikeThisException(
+                'Specified instance name {0} is already used.'.format(name)
+            )
+        return True
+
+    def verify_ec2_instance_by_private_ip(self, private_ip_address):
+        all_nics = self.conn.get_all_network_interfaces()
+        all_private_ips = [
+            entry.private_ip_address for entry in all_nics
+        ]
+        if private_ip_address in all_private_ips:
+            raise EC2MoreLikeThisException(
+                'Specified private IP {0} is already used.'
+                ''.format(private_ip_address)
+            )
+        return True
+
     def run(self,
             wait_until_running=True,
             checking_state_term=5,
