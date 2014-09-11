@@ -628,45 +628,53 @@ class MoreLikeThisEC2Instance(object):
             print('EBS options: ')
             for key, value in self.device_mapping.items():
                 print('{0}: {1}'.format(key, value))
-        run_params['block_device_map'] = self._construct_device_mapping(
-            self.device_mapping
-        )
-        reservation = self.base_image.run(
-            **run_params
-        )
-        instance = reservation.instances[0]
-        if self.ec2_tags:
-            instance.add_tags(self.ec2_tags)
-            logging.debug(
-                'Set following tags: {0}'.format(self.ec2_tags)
-            )
-        else:
-            logging.debug(
-                'You specify no tags for new EC2 instance.'
-            )
+            print('Tags: ')
+            for key, value in self.ec2_tags.items():
+                print('{0}: {1}'.format(key, value))
 
-        if wait_until_running:
-            pending_count = 0
-            while (
-                self.conn.get_all_instance_status(
-                    instance.id
-                )[0].state_name.lower() == 'pending'
-            ):
-                logging.info(
-                    'Created instance state is "pending"'
+        if not dry_run:
+            run_params['block_device_map'] = self._construct_device_mapping(
+                self.device_mapping
+            )
+            reservation = self.base_image.run(
+                **run_params
+            )
+            instance = reservation.instances[0]
+            if self.ec2_tags:
+                instance.add_tags(self.ec2_tags)
+                logging.debug(
+                    'Set following tags: {0}'.format(self.ec2_tags)
                 )
-                time.sleep(checking_state_term)
-                pending_count += 1
+            else:
+                logging.debug(
+                    'You specify no tags for new EC2 instance.'
+                )
 
-                if pending_count > checking_count_threshold:
-                    logging.warn(
-                        'Checking instance state timeout.'
+            if wait_until_running:
+                pending_count = 0
+                while (
+                    self.conn.get_all_instance_status(
+                        instance.id
+                    )[0].state_name.lower() == 'pending'
+                ):
+                    logging.info(
+                        'Created instance state is "pending"'
                     )
-                    break
-            return instance
+                    time.sleep(checking_state_term)
+                    pending_count += 1
+
+                    if pending_count > checking_count_threshold:
+                        logging.warn(
+                            'Checking instance state timeout.'
+                        )
+                        break
+                return instance
+
+            else:
+                return instance
 
         else:
-            return instance
+            return True
 
 
 def main():
@@ -785,7 +793,7 @@ def main():
             device=options.override_optional_ebs_device
         )
 
-    instance = more_like_this_ec2.run(
+    more_like_this_ec2.run(
         wait_until_running=options.wait_until_running,
         checking_state_term=10,
         checking_count_threshold=60,
