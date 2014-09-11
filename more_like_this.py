@@ -19,10 +19,10 @@ DEFAULT = {
     'base_ec2_id': None,
     'hostname': None,
     'override_ami_id': None,
-    'override_sg_ids': None,
+    'override_security_group_ids': None,
     'override_subnet_id': None,
     'override_instance_type': None,
-    'override_private_ip': None,
+    'override_private_ip_address': None,
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
     'override_root_ebs_size': None,
@@ -82,9 +82,9 @@ def get_args():
         help='When you want to override new instance AMI, use this option.'
     )
     override_ec2_option_group.add_option(
-        '--override-sg-ids', '-s',
-        type='string', default=DEFAULT['override_sg_ids'],
-        dest='override_sg_ids',
+        '--override-security-group-ids', '-s',
+        type='string', default=DEFAULT['override_security_group_ids'],
+        dest='override_security_group_ids',
         help=(
             'When you want to override new instance security groups, '
             'use this option. '
@@ -107,9 +107,9 @@ def get_args():
         )
     )
     override_ec2_option_group.add_option(
-        '--override-private-ip', '-x',
-        type='string', default=DEFAULT['override_private_ip'],
-        dest='override_private_ip',
+        '--override-private-ip-address', '-x',
+        type='string', default=DEFAULT['override_private_ip_address'],
+        dest='override_private_ip_address',
         help=(
             'when you want to override new instance private IP address, '
             'use this option.'
@@ -313,14 +313,19 @@ def convert_options(options):
                 )
             )
 
-    if options.override_sg_ids:
+    if options.override_security_group_ids:
         try:
-            options.override_sg_ids = [
-                entry.strip() for entry in options.override_sg_ids.split(',')
+            options.override_security_group_ids = [
+                entry.strip() for entry in (
+                    options.override_security_group_ids.split(',')
+                )
             ]
         except:
             raise EC2MoreLikeThisException(
-                '--override-sg-ids option must be separated by comma.'
+                (
+                    '--override-security-group-ids option '
+                    'must be separated by comma.'
+                )
             )
 
     return options
@@ -358,7 +363,7 @@ def verify_ec2_instance_by_name(conn, name):
     return True
 
 
-def verify_ec2_instance_by_private_ip(conn, private_ip_address):
+def verify_ec2_instance_by_private_ip_address(conn, private_ip_address):
     all_nics = conn.get_all_network_interfaces()
     all_private_ips = [
         entry.private_ip_address for entry in all_nics
@@ -389,6 +394,10 @@ def get_base_ec2_instance(conn,
     if not base_ec2_name and not base_ec2_id:
         raise EC2MoreLikeThisException(
             '"base_ec2_name" or "base_ec2_id" argument is required.'
+        )
+    elif base_ec2_name and base_ec2_id:
+        raise EC2MoreLikeThisException(
+            '"base_ec2_name" and "base_ec2_id" arguments are exclusive.'
         )
     elif base_ec2_name:
         try:
@@ -431,10 +440,6 @@ def get_base_ec2_instance(conn,
             raise EC2MoreLikeThisException(
                 exception.__str__()
             )
-    else:
-        raise EC2MoreLikeThisException(
-            '"base_ec2_name" and "base_ec2_id" arguments are exclusive.'
-        )
 
 
 def get_ami(conn, ami_id):
@@ -475,6 +480,7 @@ class MoreLikeThisEC2Instance(object):
         self.ec2_attributes['instance_type'] = (
             self.base_ec2_instance.instance_type
         )
+        self.ec2_attributes['private_ip_address'] = None
         try:
             self.ec2_attributes['disable_api_termination'] = (
                 self.base_ec2_instance.get_attribute(
@@ -482,6 +488,7 @@ class MoreLikeThisEC2Instance(object):
                 ).get('disableApiTermination', False)
             )
         except AttributeError:
+            self.ec2_attributes['disable_api_termination'] = None
             logging.warn(
                 'Instance doesn\'t have "disableApiTermination" attribute.'
             )
@@ -492,6 +499,7 @@ class MoreLikeThisEC2Instance(object):
                 ).get('instanceInitiatedShutdownBehavior', 'stop')
             )
         except AttributeError:
+            self.ec2_attributes['instance_initiated_shutdown_behavior'] = None
             logging.warn(
                 'Instance doesn\'t have '
                 '"instanceInitiatedShutdownBehavior" attribute.'
@@ -621,20 +629,26 @@ def main():
             conn=conn,
             name=options.hostname
         )
-    if options.override_private_ip:
-        verify_ec2_instance_by_private_ip(
+    if options.override_private_ip_address:
+        verify_ec2_instance_by_private_ip_address(
             conn=conn,
-            private_ip_address=options.override_private_ip
+            private_ip_address=options.override_private_ip_address
         )
     base_ec2_instance = get_base_ec2_instance(
         conn=conn,
         base_ec2_name=options.base_ec2_name,
         base_ec2_id=options.base_ec2_id
     )
-    base_image = get_ami(
-        conn=conn,
-        ami_id=base_ec2_instance.image_id
-    )
+    if not options.override_ami_id:
+        base_image = get_ami(
+            conn=conn,
+            ami_id=base_ec2_instance.image_id
+        )
+    else:
+        base_image = get_ami(
+            conn=conn,
+            ami_id=options.override_ami_id
+        )
     more_like_this_ec2 = MoreLikeThisEC2Instance()
     more_like_this_ec2.set_ec2_connection(conn=conn)
     more_like_this_ec2.set_base_ec2_instance(

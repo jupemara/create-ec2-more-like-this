@@ -34,4 +34,4 @@ class BaseMoreLikeThisEC2Instance(object):
     @moto.mock_ec2
     def teardown(self):
         self.conn.close()
-
+        del(self.more_like_this)
