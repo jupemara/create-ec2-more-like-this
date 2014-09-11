@@ -579,7 +579,7 @@ class MoreLikeThisEC2Instance(object):
         devices = self.device_mapping.keys()
         devices.remove('/dev/sda1')
         current_optional_device = devices[0]
-        if device is None:
+        if not device:
             device = devices[0]
         if device in self.device_mapping.keys():
             self.device_mapping[device][name] = value
@@ -720,6 +720,69 @@ def main():
     if options.hostname:
         more_like_this_ec2.apply_ec2_hostname(
             hostname=options.hostname
+        )
+    if options.override_security_group_ids:
+        more_like_this_ec2.apply_ec2_option(
+            name='security_group_ids',
+            value=options.security_group_ids
+        )
+    if options.override_subnet_id:
+        more_like_this_ec2.apply_ec2_option(
+            name='subnet_id',
+            value=options.override_subnet_id
+        )
+    if options.override_instance_type:
+        more_like_this_ec2.apply_ec2_option(
+            name='instance_type',
+            value=options.override_instance_type
+        )
+    if options.override_private_ip_address:
+        more_like_this_ec2.apply_ec2_option(
+            name='private_ip_address',
+            value=options.override_private_ip_address
+        )
+    if options.override_terminate_protection:
+        more_like_this_ec2.apply_ec2_option(
+            name='disable_api_termination',
+            value=options.override_terminate_protection
+        )
+    if options.override_shutdown_behavior:
+        more_like_this_ec2.apply_ec2_option(
+            name='instance_initiated_shutdown_behavior',
+            value=options.override_shutdown_behavior
+        )
+    if options.override_root_ebs_size:
+        more_like_this_ec2.apply_root_ebs_option(
+            name='size',
+            value=options.override_root_ebs_size
+        )
+    if options.override_root_ebs_type:
+        more_like_this_ec2.apply_root_ebs_option(
+            name='type',
+            value=options.override_root_ebs_type
+        )
+    if options.override_root_ebs_iops:
+        more_like_this_ec2.apply_root_ebs_option(
+            name='iops',
+            value=options.override_root_ebs_iops
+        )
+    if options.override_optional_ebs_size:
+        more_like_this_ec2.apply_optional_ebs_option(
+            name='size',
+            value=options.override_optional_ebs_size,
+            device=options.override_optional_ebs_device
+        )
+    if options.override_optional_ebs_type:
+        more_like_this_ec2.apply_optional_ebs_option(
+            name='type',
+            value=options.override_optional_ebs_type,
+            device=options.override_optional_ebs_device
+        )
+    if options.override_optional_ebs_iops:
+        more_like_this_ec2.apply_optional_ebs_option(
+            name='iops',
+            value=options.override_optional_ebs_iops,
+            device=options.override_optional_ebs_device
         )
 
     instance = more_like_this_ec2.run(
