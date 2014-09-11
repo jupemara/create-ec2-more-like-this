@@ -3,11 +3,11 @@
 
 import logging
 import optparse
+import sys
 import time
 
 import boto.ec2
 import boto.ec2.blockdevicemapping
-import boto.ec2.image
 import boto.exception
 
 
@@ -390,10 +390,6 @@ def get_base_ec2_instance(conn,
         raise EC2MoreLikeThisException(
             '"base_ec2_name" or "base_ec2_id" argument is required.'
         )
-    elif base_ec2_name and base_ec2_id:
-        raise EC2MoreLikeThisException(
-            '"base_ec2_name" and "base_ec2_id" arguments are exclusive.'
-        )
     elif base_ec2_name:
         try:
             reservations = conn.get_all_instances(
@@ -435,6 +431,10 @@ def get_base_ec2_instance(conn,
             raise EC2MoreLikeThisException(
                 exception.__str__()
             )
+    else:
+        raise EC2MoreLikeThisException(
+            '"base_ec2_name" and "base_ec2_id" arguments are exclusive.'
+        )
 
 
 def get_ami(conn, ami_id):
@@ -499,7 +499,16 @@ class MoreLikeThisEC2Instance(object):
         self.ec2_tags = self.base_ec2_instance.tags
 
     def set_base_block_device_mapping(self, block_device_mapping):
+        if len(block_device_mapping.keys()) > 2:
+            raise NotImplementedError(
+                (
+                    'Sorry!! We haven\'t implement "Launch more like this" '
+                    'to ec2 instance that has EBSs more than two.'
+                )
+            )
+
         self.base_block_device_mapping = block_device_mapping
+
         for key, value in self.base_block_device_mapping.items():
             volume = self.conn.get_all_volumes(
                 volume_ids=value.volume_id
@@ -520,14 +529,6 @@ class MoreLikeThisEC2Instance(object):
         else:
             raise EC2MoreLikeThisException(
                 'EC2 instance has no attributes {0}'.format(name)
-            )
-
-        if len(self.base_block_device_mapping.keys()) > 2:
-            raise NotImplementedError(
-                (
-                    'Sorry!! We haven\'t implement "Launch more like this" '
-                    'to ec2 instance that has EBSs more than two.'
-                )
             )
 
     def apply_ec2_hostname(self, hostname):
@@ -625,23 +626,17 @@ def main():
             conn=conn,
             private_ip_address=options.override_private_ip
         )
-    if options.base_ec2_name:
-        base_ec2_instance = get_base_ec2_instance(
-            conn=conn,
-            base_ec2_name=options.base_ec2_name
-        )
-    else:
-        base_ec2_instance = get_base_ec2_instance(
-            conn=conn,
-            base_ec2_id=options.base_ec2_id
-        )
+    base_ec2_instance = get_base_ec2_instance(
+        conn=conn,
+        base_ec2_name=options.base_ec2_name,
+        base_ec2_id=options.base_ec2_id
+    )
     base_image = get_ami(
         conn=conn,
         ami_id=base_ec2_instance.image_id
     )
-    more_like_this_ec2 = MoreLikeThisEC2Instance(
-        conn=conn
-    )
+    more_like_this_ec2 = MoreLikeThisEC2Instance()
+    more_like_this_ec2.set_ec2_connection(conn=conn)
     more_like_this_ec2.set_base_ec2_instance(
         ec2_instance=base_ec2_instance
     )
@@ -665,4 +660,10 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except EC2MoreLikeThisException as exception:
+        logging.error(
+            exception.__str__()
+        )
+        sys.exit(1)
