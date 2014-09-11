@@ -542,7 +542,16 @@ class MoreLikeThisEC2Instance(object):
     def apply_ec2_hostname(self, hostname):
         self.ec2_tags['Name'] = hostname
 
-    def apply_ebs_option(self, name, value, device='/dev/sda1'):
+    def apply_root_ebs_option(self, name, value, device='/dev/sda1'):
+        """
+        Apply ebs option to root device.
+        If specified device does not exist, you cannot set parameter.
+        :param name: parameter name e.x: size, type or iops
+        :type name: str
+        :param value: parameter value
+        :param device: device name. e.x: /dev/sda1
+        :type device: str
+        """
         if device in self.device_mapping.keys():
             self.device_mapping[device][name] = value
         else:
@@ -551,7 +560,33 @@ class MoreLikeThisEC2Instance(object):
                 ''.format(device)
             )
 
-    def construct_device_mapping(self, raw_options):
+    def apply_optional_ebs_option(self, name, value, device=None):
+        """
+        Apply ebs option to optional device.
+        :param name: parameter name e.x: size, type or iops
+        :type name: str
+        :param value: parameter value
+        :param device: device name. e.x: /dev/sdh
+        :type device: str
+        """
+        devices = self.device_mapping.keys()
+        devices.remove('/dev/sda1')
+        current_optional_device = devices[0]
+        if device is None:
+            device = devices[0]
+        if device in self.device_mapping.keys():
+            self.device_mapping[device][name] = value
+        else:
+            logging.info(
+                'Change device name. In {0} out {1}'
+                ''.format(device, current_optional_device)
+            )
+            self.device_mapping[device] = (
+                self.device_mapping.pop(current_optional_device)
+            )
+            self.device_mapping[device][name] = value
+
+    def _construct_device_mapping(self, raw_options):
         block_device_mapping = boto.ec2.blockdevicemapping.BlockDeviceMapping(
             connection=self.conn
         )
@@ -573,7 +608,7 @@ class MoreLikeThisEC2Instance(object):
             dry_run=False):
         run_params = self.ec2_attributes.copy()
         run_params['dry_run'] = dry_run
-        run_params['block_device_map'] = self.construct_device_mapping(
+        run_params['block_device_map'] = self._construct_device_mapping(
             self.device_mapping
         )
         reservation = self.base_image.run(
@@ -593,8 +628,9 @@ class MoreLikeThisEC2Instance(object):
         if wait_until_running:
             pending_count = 0
             while (
-                self.conn.get_all_instance_status(instance.id)[0].lower() ==
-                'pending'
+                self.conn.get_all_instance_status(
+                    instance.id
+                )[0].state_name.lower() == 'pending'
             ):
                 logging.info(
                     'Created instance state is "pending"'
