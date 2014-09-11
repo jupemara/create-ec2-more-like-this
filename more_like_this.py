@@ -33,8 +33,9 @@ DEFAULT = {
     'override_optional_ebs_type': None,
     'override_optional_ebs_iops': None,
     'userdata': None,
-    'log_level': 'INFO',
     'dry_run': False,
+    'log_level': 'INFO',
+    'wait_until_running': False
 }
 
 
@@ -244,6 +245,12 @@ def get_args():
         action='store_true', default=DEFAULT['dry_run'],
         dest='dry_run',
         help='Dry run flag.'
+    )
+    parser.add_option(
+        '--wait-until-running', '-W',
+        action='store_true', default=DEFAULT['wait_until_running'],
+        dest='wait_until_running',
+        help='Wait until new instance status is running.'
     )
     parser.add_option(
         '--log-level', '-L',
@@ -608,6 +615,19 @@ class MoreLikeThisEC2Instance(object):
             dry_run=False):
         run_params = self.ec2_attributes.copy()
         run_params['dry_run'] = dry_run
+        if dry_run:
+            logging.info(
+                (
+                    'You set dry run flag is true!! '
+                    'Create new EC2 instance with following options.'
+                )
+            )
+            print('EC2 options: ')
+            for key, value in run_params.items():
+                print('{0}: {1}'.format(key, value))
+            print('EBS options: ')
+            for key, value in self.device_mapping.items():
+                print('{0}: {1}'.format(key, value))
         run_params['block_device_map'] = self._construct_device_mapping(
             self.device_mapping
         )
@@ -703,6 +723,7 @@ def main():
         )
 
     instance = more_like_this_ec2.run(
+        wait_until_running=options.wait_until_running,
         checking_state_term=10,
         checking_count_threshold=60,
         dry_run=options.dry_run
