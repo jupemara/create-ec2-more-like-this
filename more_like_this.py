@@ -708,9 +708,13 @@ class MoreLikeThisEC2Instance(object):
             instance = reservation.instances[0]
 
             if self.ec2_tags:
-                instance.add_tags(self.ec2_tags)
-                logging.debug(
-                    'Set following tags: {0}'.format(self.ec2_tags)
+                for key, value in self.ec2_tags.items():
+                    instance.add_tag(
+                        key=key,
+                        value=value
+                    )
+                logging.info(
+                    'Set tag: {{{0}: {1}}}'.format(key, value)
                 )
             else:
                 logging.debug(
