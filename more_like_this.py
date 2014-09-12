@@ -608,6 +608,48 @@ class MoreLikeThisEC2Instance(object):
             )
         return block_device_mapping
 
+    def add_name_tag_to_volume(self, instance_id, block_device_mapping):
+        """
+        Set Instance ID to tag of volume's Name.
+        :param instance_id: Instance ID (Any string)
+        :type instance_id: str
+        :param block_device_mapping: Block device mapping of instance.
+        :type block_device_mapping:
+        boto.ec2.blockdevicemapping.BlockDeviceMapping
+        :return: True
+        :rtype: bool
+        """
+
+        for key, value in block_device_mapping.items():
+            tag_value = (
+                '{instance_id}:{device}'
+                ''.format(
+                    instance_id=instance_id,
+                    device=key
+                )
+            )
+            try:
+                volume = self.conn.get_all_volumes(
+                    volume_ids=[value.volume_id]
+                )[0]
+                volume.add_tag(
+                    key='Name',
+                    value=tag_value
+                )
+                logging.info(
+                    'Add tag {{Name: {value}}} to {device}'
+                    ''.format(
+                        value=tag_value,
+                        device=key
+                    )
+                )
+            except Exception as exception:
+                raise EC2MoreLikeThisException(
+                    exception.__str__()
+                )
+
+        return block_device_mapping
+
     def run(self,
             wait_until_running=True,
             checking_state_term=5,
@@ -640,6 +682,7 @@ class MoreLikeThisEC2Instance(object):
                 **run_params
             )
             instance = reservation.instances[0]
+
             if self.ec2_tags:
                 instance.add_tags(self.ec2_tags)
                 logging.debug(
@@ -648,6 +691,12 @@ class MoreLikeThisEC2Instance(object):
             else:
                 logging.debug(
                     'You specify no tags for new EC2 instance.'
+                )
+
+            if instance.block_device_mapping:
+                self.add_name_tag_to_volume(
+                    instance_id=instance.id,
+                    block_device_mapping=instance.block_device_mapping
                 )
 
             if wait_until_running:
@@ -672,9 +721,6 @@ class MoreLikeThisEC2Instance(object):
 
             else:
                 return instance
-
-        else:
-            return True
 
 
 def main():
