@@ -242,9 +242,9 @@ def get_args():
     )
     parser.add_option(
         '--dry-run', '-D',
-        action='store_true', default=DEFAULT['dry_run'],
+        type='string', default=DEFAULT['dry_run'],
         dest='dry_run',
-        help='Dry run flag.'
+        help='Dry run flag. Please specify "true" or "false".'
     )
     parser.add_option(
         '--wait-until-running', '-W',
@@ -320,6 +320,18 @@ def convert_options(options):
                 )
             )
 
+    if options.dry_run:
+        if options.dry_run.lower() == 'true':
+            options.dry_run = True
+        elif options.dry_run.lower() == 'false':
+            options.dry_run = False
+        else:
+            raise EC2MoreLikeThisException(
+                (
+                    '"--dry-run" option must be "true" or "false"'
+                )
+            )
+
     if options.override_security_group_ids:
         try:
             options.override_security_group_ids = [
@@ -375,6 +387,9 @@ def verify_ec2_instance_by_private_ip_address(conn, private_ip_address):
     all_private_ips = [
         entry.private_ip_address for entry in all_nics
     ]
+    logging.debug(
+        'All private IP addresses are {0}'.format(all_private_ips)
+    )
     if private_ip_address in all_private_ips:
         raise EC2MoreLikeThisException(
             'Specified private IP {0} is already used.'
@@ -407,6 +422,9 @@ def get_base_ec2_instance(conn,
             '"base_ec2_name" and "base_ec2_id" arguments are exclusive.'
         )
     elif base_ec2_name:
+        logging.debug(
+            'Use "Name" tag to searching based EC2 instance.'
+        )
         try:
             reservations = conn.get_all_instances(
                 filters={
@@ -432,6 +450,9 @@ def get_base_ec2_instance(conn,
                 exception.__str__()
             )
     elif base_ec2_id:
+        logging.debug(
+            'Use "InstanceId" tag to searching based EC2 instance.'
+        )
         try:
             reservations = conn.get_all_instances(instance_ids=[base_ec2_id])
             instances = reservations[0].instances
@@ -453,6 +474,9 @@ def get_ami(conn, ami_id):
 
     try:
         result = conn.get_all_images(image_ids=[ami_id])
+        logging.debug(
+            'Based "ami" is {0}'.format(result)
+        )
         return result[0]
     except boto.exception.EC2ResponseError as exception:
         raise EC2MoreLikeThisException(
