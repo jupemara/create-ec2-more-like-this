@@ -29,7 +29,9 @@ class BaseMoreLikeThisEC2Instance(object):
             name='TESTING_IMAGE'
         )
         self.image = self.conn.get_all_images()[0]
-        self.more_like_this = more_like_this.MoreLikeThisEC2Instance()
+        self.more_like_this = more_like_this.MoreLikeThisEC2Instance(
+            conn=self.conn
+        )
 
     @moto.mock_ec2
     def teardown(self):
