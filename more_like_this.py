@@ -33,7 +33,7 @@ DEFAULT = {
     'override_optional_ebs_type': None,
     'override_optional_ebs_iops': None,
     'userdata': None,
-    'dry_run': False,
+    'dry_run': 'false',
     'log_level': 'INFO',
     'wait_until_running': False
 }
