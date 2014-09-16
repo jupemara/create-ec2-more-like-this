@@ -713,9 +713,9 @@ class MoreLikeThisEC2Instance(object):
                         key=key,
                         value=value
                     )
-                logging.info(
-                    'Set tag: {{{0}: {1}}}'.format(key, value)
-                )
+                    logging.info(
+                        'Set tag: {{{0}: {1}}}'.format(key, value)
+                    )
             else:
                 logging.debug(
                     'You specify no tags for new EC2 instance.'
