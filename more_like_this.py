@@ -362,8 +362,7 @@ def convert_options(options):
     if options.override_terminate_protection:
         options.override_terminate_protection = convert_str2bool(
             string=options.override_terminate_protection,
-            error_message=
-            (
+            error_message=(
                 '"--override-terminate-protection" option must be '
                 '"true" or "false"'
             )
@@ -375,8 +374,7 @@ def convert_options(options):
                 string=(
                     options.override_primary_nic_associate_public_ip_address
                 ),
-                error_message=
-                (
+                error_message=(
                     '"--override-primary-nic-associate-public-ip-address" '
                     'option must be "true" or "false"'
                 )
@@ -389,8 +387,7 @@ def convert_options(options):
                 string=(
                     options.override_secondary_nic_associate_public_ip_address
                 ),
-                error_message=
-                (
+                error_message=(
                     '"--override-secondary-nic-associate-public-ip-address" '
                     'option must be "true" or "false"'
                 )
@@ -400,8 +397,7 @@ def convert_options(options):
     if options.override_terminate_protection:
         options.override_terminate_protection = convert_str2bool(
             string=options.override_terminate_protection,
-            error_message=
-            (
+            error_message=(
                 '"--override-terminate-protection" option must be '
                 '"true" or "false"'
             )
@@ -804,8 +800,8 @@ class MoreLikeThisEC2Instance(object):
         return interface_collections
 
     def _create_private_ip_addresses(self,
-                                    primary_private_ip_address,
-                                    raw_private_ip_addresses):
+                                     primary_private_ip_address,
+                                     raw_private_ip_addresses):
 
         private_ip_addresses = list()
         for entry in raw_private_ip_addresses:
@@ -981,7 +977,6 @@ class MoreLikeThisEC2Instance(object):
             return instance
 
 
-
 def main():
     options = get_args()
     validate_options(options)
@@ -1006,8 +1001,9 @@ def main():
     if options.override_secondary_nic_private_ip_address:
         verify_ec2_instance_by_private_ip_address(
             conn=conn,
-            private_ip_address=
-            options.override_secondary_nic_private_ip_address
+            private_ip_address=(
+                options.override_secondary_nic_private_ip_address
+            )
         )
     base_ec2_instance = get_base_ec2_instance(
         conn=conn,
@@ -1081,8 +1077,9 @@ def main():
     ):
         more_like_this_ec2.apply_nic_associate_public_ip(
             key='primary',
-            associate_public_ip_address=
-            options.override_primary_nic_associate_public_ip_address
+            associate_public_ip_address=(
+                options.override_primary_nic_associate_public_ip_address
+            )
         )
     if options.override_secondary_nic_private_ip_address:
         more_like_this_ec2.apply_nic_private_ip(
@@ -1095,8 +1092,9 @@ def main():
     ):
         more_like_this_ec2.apply_nic_associate_public_ip(
             key='secondary',
-            associate_public_ip_address=
-            options.override_secondary_nic_associate_public_ip_address
+            associate_public_ip_address=(
+                options.override_secondary_nic_associate_public_ip_address
+            )
         )
     if options.override_root_ebs_size:
         more_like_this_ec2.apply_root_ebs_option(
