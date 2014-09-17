@@ -729,34 +729,59 @@ class MoreLikeThisEC2Instance(object):
                     'You specify no tags for new EC2 instance.'
                 )
 
-            if instance.block_device_mapping:
-                self.add_name_tag_to_volume(
-                    instance_id=instance.id,
-                    block_device_mapping=instance.block_device_mapping
+            pending_count = 0
+            while (
+                instance.state.lower() == 'pending' and
+                not instance.block_device_mapping
+            ):
+                logging.info(
+                    'Created instance state is "pending"'
                 )
+                time.sleep(checking_state_term)
+                pending_count += 1
+
+                instance.update()
+
+                if pending_count > checking_count_threshold:
+                    logging.warn(
+                        'Checking instance state is timeout.'
+                    )
+                    break
+
+            self.add_name_tag_to_volume(
+                instance_id=instance.id,
+                block_device_mapping=instance.block_device_mapping
+            )
 
             if wait_until_running:
                 pending_count = 0
+                instance_status = ''
+                system_status = ''
                 while (
-                    self.conn.get_all_instance_status(
-                        instance.id
-                    )[0].state_name.lower() == 'pending'
+                    instance_status.lower() != 'ok' and
+                    system_status.lower() != 'ok'
                 ):
+                    status = self.conn.get_all_instance_status(
+                        instance_ids=[instance.id]
+                    )[0]
+                    instance_status = status.instance_status.status
+                    system_status = status.system_status.status
                     logging.info(
-                        'Created instance state is "pending"'
+                        'Instance status is {0}'.format(instance_status)
+                    )
+                    logging.info(
+                        'System status is {0}'.format(system_status)
                     )
                     time.sleep(checking_state_term)
                     pending_count += 1
 
                     if pending_count > checking_count_threshold:
                         logging.warn(
-                            'Checking instance state timeout.'
+                            'Checking instance state is timeout.'
                         )
                         break
-                return instance
+            return instance
 
-            else:
-                return instance
 
 
 def main():
