@@ -638,6 +638,7 @@ class MoreLikeThisEC2Instance(object):
 
     def set_base_image(self, base_image):
         self.base_image = base_image
+        self.ec2_attributes['image_id'] = base_image.id
 
     def set_base_interfaces(self, base_interfaces):
         if len(base_interfaces) > 2:
