@@ -37,7 +37,8 @@ class TestMoreLikeThisEC2InstanceWithoutEBS(
         self.more_like_this.set_base_ec2_instance(ec2_instance=instance)
 
         result = self.more_like_this.run(
-            wait_until_running=False
+            wait_until_running=False,
+            checking_state_term=0.001
         )
 
         nose.tools.ok_(

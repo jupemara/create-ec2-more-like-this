@@ -43,7 +43,8 @@ class TestApplyEC2OverrideOptions(test.base.BaseMoreLikeThisEC2Instance):
         )
         self.more_like_this.set_ec2_connection(self.conn)
         result = self.more_like_this.run(
-            wait_until_running=False
+            wait_until_running=False,
+            checking_state_term=0.001
         )
         nose.tools.ok_(
             (self.more_like_this.ec2_attributes.get(name) == value) and
