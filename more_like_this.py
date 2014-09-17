@@ -650,6 +650,8 @@ class MoreLikeThisEC2Instance(object):
         :rtype: bool
         """
 
+        instance_id = self.ec2_tags.get('Name', instance_id)
+
         for key, value in block_device_mapping.items():
             tag_value = (
                 '{instance_id}:{device}'
