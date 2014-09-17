@@ -866,7 +866,7 @@ class MoreLikeThisEC2Instance(object):
 
     def run(self,
             wait_until_running=True,
-            checking_state_term=5,
+            checking_state_term=10,
             checking_count_threshold=60,
             dry_run=False):
         run_params = self.ec2_attributes.copy()
