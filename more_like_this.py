@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import base64
 import logging
 import optparse
 import sys
@@ -569,6 +570,11 @@ class MoreLikeThisEC2Instance(object):
             raise EC2MoreLikeThisException(
                 'EC2 instance has no attributes {0}'.format(name)
             )
+
+    def inject_user_data(self, user_data):
+        self.ec2_attributes['user_data'] = base64.b64encode(
+            user_data
+        )
 
     def apply_ec2_hostname(self, hostname):
         self.ec2_tags['Name'] = hostname
