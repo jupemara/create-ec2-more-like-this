@@ -9,6 +9,7 @@ import time
 
 import boto.ec2
 import boto.ec2.blockdevicemapping
+import boto.ec2.networkinterface
 import boto.exception
 
 
@@ -570,9 +571,12 @@ class MoreLikeThisEC2Instance(object):
         self.conn = conn
         self.base_ec2_instance = None
         self.base_block_device_mapping = None
+        self.base_interfaces = None
         self.ec2_attributes = dict()
         self.ec2_tags = dict()
         self.device_mapping = dict()
+        self.interface_collection_attributes = dict()
+        self.interface_collections = list()
         self.base_image = None
 
     def set_ec2_connection(self, conn):
@@ -582,16 +586,9 @@ class MoreLikeThisEC2Instance(object):
         self.base_ec2_instance = ec2_instance
 
         self.ec2_attributes['key_name'] = self.base_ec2_instance.key_name
-        self.ec2_attributes['security_group_ids'] = (
-            [
-                entry.id for entry in self.base_ec2_instance.groups
-            ]
-        )
-        self.ec2_attributes['subnet_id'] = self.base_ec2_instance.subnet_id
         self.ec2_attributes['instance_type'] = (
             self.base_ec2_instance.instance_type
         )
-        self.ec2_attributes['private_ip_address'] = None
         try:
             self.ec2_attributes['disable_api_termination'] = (
                 self.base_ec2_instance.get_attribute(
@@ -641,6 +638,56 @@ class MoreLikeThisEC2Instance(object):
 
     def set_base_image(self, base_image):
         self.base_image = base_image
+
+    def set_base_interfaces(self, base_interfaces):
+        if len(base_interfaces) > 2:
+            logging.warn(
+                (
+                    'We don\'t support the "Elastic Network Interface" '
+                    'of three or more. '
+                    'Ignore "override_*_nic_*" options.'
+                )
+            )
+        else:
+            self.base_interfaces = base_interfaces
+            for entry in base_interfaces:
+                if hasattr(entry, 'publicIp'):
+                    associate_public_ip = True
+                else:
+                    associate_public_ip = None
+
+                interface_specification = (
+                    boto.ec2.networkinterface
+                    .NetworkInterfaceSpecification(
+                        device_index=entry.attachment.device_index,
+                        subnet_id=entry.subnet_id,
+                        groups=[
+                            security_group.id
+                            for security_group in entry.groups
+                        ],
+                        delete_on_termination=(
+                            entry.attachment.delete_on_termination
+                        ),
+                        private_ip_addresses=[
+                            boto.ec2.networkinterface.PrivateIPAddress(
+                                private_ip_address=None,
+                                primary=private_ip_address.primary
+                            )
+                            for private_ip_address
+                            in entry.private_ip_addresses
+                        ],
+                        associate_public_ip_address=associate_public_ip
+                    )
+                )
+
+                if entry.attachment.device_index == 0:
+                    self.interface_collection_attributes['primary'] = (
+                        interface_specification
+                    )
+                else:
+                    self.interface_collection_attributes['secondary'] = (
+                        interface_specification
+                    )
 
     def apply_ec2_option(self, name, value):
         if value and name in self.ec2_attributes.keys():
@@ -716,6 +763,65 @@ class MoreLikeThisEC2Instance(object):
                 )
             )
         return block_device_mapping
+
+    def apply_nic_private_ip(self, key, private_ip):
+        private_ip_addresses = (
+            self.interface_collection_attributes[key].private_ip_addresses
+        )
+        for entry in private_ip_addresses:
+            if entry.primary is True:
+                private_ip_addresses[
+                    private_ip_addresses.index(entry)
+                ].private_ip_address = private_ip
+
+    def apply_nic_associate_public_ip(self,
+                                      key,
+                                      associate_public_ip_address):
+        (
+            self.interface_collection_attributes[key]
+            .associate_public_ip_address
+        ) = associate_public_ip_address
+
+    def apply_subnet_id(self, subnet_id):
+        for entry in self.interface_collection_attributes.keys():
+            self.interface_collection_attributes[entry].subnet_id = subnet_id
+
+    def apply_security_group_ids(self, security_group_ids):
+        for entry in self.interface_collection_attributes.keys():
+            self.interface_collection_attributes[entry].groups = (
+                security_group_ids
+            )
+
+    def _construct_interfaces(self, raw_interface_collections):
+        if len(raw_interface_collections.values()) <= 0:
+            return None
+        interface_collections = (
+            boto.ec2.networkinterface.NetworkInterfaceCollection(
+                *raw_interface_collections.values()
+            )
+        )
+        return interface_collections
+
+    def _create_private_ip_addresses(self,
+                                    primary_private_ip_address,
+                                    raw_private_ip_addresses):
+
+        private_ip_addresses = list()
+        for entry in raw_private_ip_addresses:
+            if getattr(entry, 'primary', None):
+                private_ip_address = (
+                    boto.ec2.networkinterface.PrivateIPAddress(
+                        private_ip_address=primary_private_ip_address,
+                        primary=True
+                    )
+                )
+            else:
+                private_ip_address = (
+                    boto.ec2.networkinterface.PrivateIPAddress()
+                )
+            private_ip_addresses.append(private_ip_address)
+
+        return private_ip_addresses
 
     def add_name_tag_to_volume(self, instance_id, block_device_mapping):
         """
@@ -916,30 +1022,26 @@ def main():
     more_like_this_ec2.set_base_image(
         base_image=base_image
     )
+    more_like_this_ec2.set_base_interfaces(
+        base_interfaces=base_ec2_instance.interfaces
+    )
     # apply override options
     if options.hostname:
         more_like_this_ec2.apply_ec2_hostname(
             hostname=options.hostname
         )
     if options.override_security_group_ids:
-        more_like_this_ec2.apply_ec2_option(
-            name='security_group_ids',
-            value=options.security_group_ids
+        more_like_this_ec2.apply_security_group_ids(
+            security_group_ids=options.security_group_ids
         )
     if options.override_subnet_id:
-        more_like_this_ec2.apply_ec2_option(
-            name='subnet_id',
-            value=options.override_subnet_id
+        more_like_this_ec2.apply_subnet_id(
+            subnet_id=options.override_subnet_id
         )
     if options.override_instance_type:
         more_like_this_ec2.apply_ec2_option(
             name='instance_type',
             value=options.override_instance_type
-        )
-    if options.override_private_ip_address:
-        more_like_this_ec2.apply_ec2_option(
-            name='private_ip_address',
-            value=options.override_private_ip_address
         )
     if options.override_terminate_protection:
         more_like_this_ec2.apply_ec2_option(
