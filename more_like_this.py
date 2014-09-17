@@ -40,7 +40,7 @@ DEFAULT = {
     'userdata': None,
     'dry_run': 'false',
     'log_level': 'INFO',
-    'wait_until_running': False
+    'wait_until_running': 'false'
 }
 
 
@@ -287,7 +287,7 @@ def get_args():
     )
     parser.add_option(
         '--wait-until-running', '-W',
-        action='store_true', default=DEFAULT['wait_until_running'],
+        type='string', default=DEFAULT['wait_until_running'],
         dest='wait_until_running',
         help='Wait until new instance status is running.'
     )
@@ -407,6 +407,14 @@ def convert_options(options):
         options.dry_run = convert_str2bool(
             string=options.dry_run,
             error_message='"--dry-run" option must be "true" or "false"'
+        )
+
+    if options.wait_until_running:
+        options.wait_until_running = convert_str2bool(
+            string=options.wait_until_running,
+            error_message=(
+                '"--wait-until-running" option must be "true" or "false"'
+            )
         )
 
     if options.override_security_group_ids:
