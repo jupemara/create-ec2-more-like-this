@@ -1056,7 +1056,7 @@ def main():
             name='instance_type',
             value=options.override_instance_type
         )
-    if options.override_terminate_protection:
+    if isinstance(options.override_terminate_protection, bool):
         more_like_this_ec2.apply_ec2_option(
             name='disable_api_termination',
             value=options.override_terminate_protection
