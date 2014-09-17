@@ -884,19 +884,31 @@ class MoreLikeThisEC2Instance(object):
             )
             print('EC2 options: ')
             for key, value in run_params.items():
-                print('{0}: {1}'.format(key, value))
+                print('  {0}: {1}'.format(key, value))
             print('EBS options: ')
             for key, value in self.device_mapping.items():
-                print('{0}: {1}'.format(key, value))
+                print('  {0}: {1}'.format(key, value))
+            interface_number = 0
+            for entry in self.interface_collection_attributes.keys():
+                print('Network Interface{0}'.format(interface_number))
+                for key, value in (
+                    self.interface_collection_attributes[entry]
+                    .__dict__.items()
+                ):
+                    print('  {0}: {1}'.format(key, value))
+                interface_number += 1
             print('Tags: ')
             for key, value in self.ec2_tags.items():
-                print('{0}: {1}'.format(key, value))
+                print('  {0}: {1}'.format(key, value))
 
         if not dry_run:
             run_params['block_device_map'] = self._construct_device_mapping(
                 self.device_mapping
             )
-            reservation = self.base_image.run(
+            run_params['network_interfaces'] = self._construct_interfaces(
+                self.interface_collection_attributes
+            )
+            reservation = self.conn.run_instances(
                 **run_params
             )
             instance = reservation.instances[0]
@@ -1018,7 +1030,7 @@ def main():
         ec2_instance=base_ec2_instance
     )
     more_like_this_ec2.set_base_block_device_mapping(
-        base_ec2_instance.block_device_mapping
+        block_device_mapping=base_ec2_instance.block_device_mapping
     )
     more_like_this_ec2.set_base_image(
         base_image=base_image
