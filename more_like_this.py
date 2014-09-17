@@ -865,7 +865,7 @@ class MoreLikeThisEC2Instance(object):
         return block_device_mapping
 
     def run(self,
-            wait_until_running=True,
+            wait_until_running=False,
             checking_state_term=10,
             checking_count_threshold=60,
             dry_run=False):
