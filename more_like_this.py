@@ -23,7 +23,10 @@ DEFAULT = {
     'override_security_group_ids': None,
     'override_subnet_id': None,
     'override_instance_type': None,
-    'override_private_ip_address': None,
+    'override_primary_nic_private_ip_address': None,
+    'override_primary_nic_associate_public_ip_address': None,
+    'override_secondary_nic_private_ip_address': None,
+    'override_secondary_nic_associate_public_ip_address': None,
     'override_terminate_protection': None,
     'override_shutdown_behavior': None,
     'override_root_ebs_size': None,
@@ -109,11 +112,45 @@ def get_args():
         )
     )
     override_ec2_option_group.add_option(
-        '--override-private-ip-address', '-x',
-        type='string', default=DEFAULT['override_private_ip_address'],
-        dest='override_private_ip_address',
+        '--override-primary-nic-private-ip-address', '-x',
+        type='string',
+        default=DEFAULT['override_primary_nic_private_ip_address'],
+        dest='override_primary_nic_private_ip_address',
         help=(
-            'when you want to override new instance private IP address, '
+            'When you want to override new instance private IP address, '
+            'use this option.'
+        )
+    )
+    override_ec2_option_group.add_option(
+        '--override-primary-nic-associate-public-ip-address', '-p',
+        type='string',
+        default=DEFAULT['override_primary_nic_associate_public_ip_address'],
+        dest='override_primary_nic_associate_public_ip_address',
+        help=(
+            'When you want to override '
+            'behavior of associating public IP, '
+            'use this option.'
+        )
+    )
+    override_ec2_option_group.add_option(
+        '--override-secondary-nic-private-ip-address', '-X',
+        type='string',
+        default=DEFAULT['override_secondary_nic_private_ip_address'],
+        dest='override_secondary_nic_private_ip_address',
+        help=(
+            'If you use secondary "Elastic network interface", '
+            'and you want to override its private ip address, '
+            'use this option.'
+        )
+    )
+    override_ec2_option_group.add_option(
+        '--override-secondary-nic-associate-public-ip-address', '-P',
+        type='string',
+        default=DEFAULT['override_secondary_nic_associate_public_ip_address'],
+        dest='override_secondary_nic_associate_public_ip_address',
+        help=(
+            'If you use secondary "Elastic network interface", and '
+            'you want to override its behavior of associating public IP, '
             'use this option.'
         )
     )
@@ -306,32 +343,74 @@ def validate_options(options):
         )
 
 
+def convert_str2bool(string, error_message):
+    result = None
+    if string.lower() == 'true':
+        result = True
+    elif string.lower() == 'false':
+        result = False
+    else:
+        raise EC2MoreLikeThisException(
+            error_message
+        )
+    return result
+
+
 def convert_options(options):
 
     if options.override_terminate_protection:
-        if options.override_terminate_protection.lower() == 'true':
-            options.override_terminate_protection = True
-        elif options.override_terminate_protection.lower() == 'false':
-            options.override_terminate_protection = False
-        else:
-            raise EC2MoreLikeThisException(
+        options.override_terminate_protection = convert_str2bool(
+            string=options.override_terminate_protection,
+            error_message=
+            (
+                '"--override-terminate-protection" option must be '
+                '"true" or "false"'
+            )
+        )
+
+    if options.override_primary_nic_associate_public_ip_address:
+        options.override_primary_nic_associate_public_ip_address = (
+            convert_str2bool(
+                string=(
+                    options.override_primary_nic_associate_public_ip_address
+                ),
+                error_message=
                 (
-                    '"--override-terminate-protection" option must be '
-                    '"true" or "false"'
+                    '"--override-primary-nic-associate-public-ip-address" '
+                    'option must be "true" or "false"'
                 )
             )
+        )
+
+    if options.override_secondary_nic_associate_public_ip_address:
+        options.override_secondary_nic_associate_public_ip_address = (
+            convert_str2bool(
+                string=(
+                    options.override_secondary_nic_associate_public_ip_address
+                ),
+                error_message=
+                (
+                    '"--override-secondary-nic-associate-public-ip-address" '
+                    'option must be "true" or "false"'
+                )
+            )
+        )
+
+    if options.override_terminate_protection:
+        options.override_terminate_protection = convert_str2bool(
+            string=options.override_terminate_protection,
+            error_message=
+            (
+                '"--override-terminate-protection" option must be '
+                '"true" or "false"'
+            )
+        )
 
     if options.dry_run:
-        if options.dry_run.lower() == 'true':
-            options.dry_run = True
-        elif options.dry_run.lower() == 'false':
-            options.dry_run = False
-        else:
-            raise EC2MoreLikeThisException(
-                (
-                    '"--dry-run" option must be "true" or "false"'
-                )
-            )
+        options.dry_run = convert_str2bool(
+            string=options.dry_run,
+            error_message='"--dry-run" option must be "true" or "false"'
+        )
 
     if options.override_security_group_ids:
         try:
@@ -800,10 +879,16 @@ def main():
             conn=conn,
             name=options.hostname
         )
-    if options.override_private_ip_address:
+    if options.override_primary_nic_private_ip_address:
         verify_ec2_instance_by_private_ip_address(
             conn=conn,
-            private_ip_address=options.override_private_ip_address
+            private_ip_address=options.override_primary_nic_private_ip_address
+        )
+    if options.override_secondary_nic_private_ip_address:
+        verify_ec2_instance_by_private_ip_address(
+            conn=conn,
+            private_ip_address=
+            options.override_secondary_nic_private_ip_address
         )
     base_ec2_instance = get_base_ec2_instance(
         conn=conn,
@@ -865,6 +950,38 @@ def main():
         more_like_this_ec2.apply_ec2_option(
             name='instance_initiated_shutdown_behavior',
             value=options.override_shutdown_behavior
+        )
+    if options.userdata:
+        more_like_this_ec2.inject_user_data(
+            user_data=options.userdata
+        )
+    if options.override_primary_nic_private_ip_address:
+        more_like_this_ec2.apply_nic_private_ip(
+            key='primary',
+            private_ip=options.override_primary_nic_private_ip_address
+        )
+    if isinstance(
+        options.override_primary_nic_associate_public_ip_address,
+        bool
+    ):
+        more_like_this_ec2.apply_nic_associate_public_ip(
+            key='primary',
+            associate_public_ip_address=
+            options.override_primary_nic_associate_public_ip_address
+        )
+    if options.override_secondary_nic_private_ip_address:
+        more_like_this_ec2.apply_nic_private_ip(
+            key='secondary',
+            private_ip=options.override_secondary_nic_private_ip_address
+        )
+    if isinstance(
+        options.override_secondary_nic_associate_public_ip_address,
+        bool
+    ):
+        more_like_this_ec2.apply_nic_associate_public_ip(
+            key='secondary',
+            associate_public_ip_address=
+            options.override_secondary_nic_associate_public_ip_address
         )
     if options.override_root_ebs_size:
         more_like_this_ec2.apply_root_ebs_option(
