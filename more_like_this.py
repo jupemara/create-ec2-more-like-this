@@ -640,9 +640,31 @@ class MoreLikeThisEC2Instance(object):
                 encrypted=volume.encrypted
             )
 
+        if (
+            self.base_image is not None and
+            not self.get_image_root_device_name(base_image=self.base_image) in
+            self.base_block_device_mapping.keys()
+        ):
+            for key, value in self.base_image.block_device_mapping.items():
+                self.device_mapping[key] = dict(
+                    size=value.size,
+                    volume_type=value.volume_type,
+                    iops=value.iops,
+                    encrypted=value.encrypted
+                )
+
     def set_base_image(self, base_image):
         self.base_image = base_image
         self.ec2_attributes['image_id'] = base_image.id
+
+    def get_image_root_device_name(self, base_image=None):
+        if base_image is None:
+            base_image = self.base_image
+
+        if hasattr(base_image, 'root_device_name'):
+            return base_image.root_device_name
+        else:
+            return '/dev/sda1'
 
     def set_base_interfaces(self, base_interfaces):
         if len(base_interfaces) > 2:
@@ -710,7 +732,7 @@ class MoreLikeThisEC2Instance(object):
     def apply_ec2_hostname(self, hostname):
         self.ec2_tags['Name'] = hostname
 
-    def apply_root_ebs_option(self, name, value, device='/dev/sda1'):
+    def apply_root_ebs_option(self, name, value, device=None):
         """
         Apply ebs option to root device.
         If specified device does not exist, you cannot set parameter.
@@ -720,6 +742,9 @@ class MoreLikeThisEC2Instance(object):
         :param device: device name. e.x: /dev/sda1
         :type device: str
         """
+        if device is None:
+            device = self.get_image_root_device_name(base_image=self.base_image)
+
         if device in self.device_mapping.keys():
             self.device_mapping[device][name] = value
         else:
@@ -737,8 +762,9 @@ class MoreLikeThisEC2Instance(object):
         :param device: device name. e.x: /dev/sdh
         :type device: str
         """
+        root_device = self.get_image_root_device_name(base_image=self.base_image)
         devices = self.device_mapping.keys()
-        devices.remove('/dev/sda1')
+        devices.remove(root_device)
         current_optional_device = devices[0]
         if not device:
             device = devices[0]
@@ -767,6 +793,20 @@ class MoreLikeThisEC2Instance(object):
                     iops=value['iops']
                 )
             )
+
+        if (
+            '/dev/xvda' in block_device_mapping.keys()
+        ) and (
+            '/dev/sda1' in block_device_mapping.keys()
+        ):
+            devices = ['/dev/xvda', '/dev/sda1']
+            root_device = self.get_image_root_device_name(
+                base_image=self.base_image
+            )
+            devices.remove(root_device)
+            removed_device = devices[0]
+            del(block_device_mapping[removed_device])
+
         return block_device_mapping
 
     def apply_nic_private_ip(self, key, private_ip):
@@ -879,6 +919,9 @@ class MoreLikeThisEC2Instance(object):
             dry_run=False):
         run_params = self.ec2_attributes.copy()
         run_params['dry_run'] = dry_run
+        run_params['block_device_map'] = self._construct_device_mapping(
+            self.device_mapping
+        )
         if dry_run:
             logging.info(
                 (
@@ -890,8 +933,8 @@ class MoreLikeThisEC2Instance(object):
             for key, value in run_params.items():
                 print('  {0}: {1}'.format(key, value))
             print('EBS options: ')
-            for key, value in self.device_mapping.items():
-                print('  {0}: {1}'.format(key, value))
+            for key, value in run_params['block_device_map'].items():
+                print('  {0}: {1}'.format(key, value.__dict__))
             interface_number = 0
             for entry in self.interface_collection_attributes.keys():
                 print('Network Interface{0}'.format(interface_number))
@@ -1033,11 +1076,11 @@ def main():
     more_like_this_ec2.set_base_ec2_instance(
         ec2_instance=base_ec2_instance
     )
-    more_like_this_ec2.set_base_block_device_mapping(
-        block_device_mapping=base_ec2_instance.block_device_mapping
-    )
     more_like_this_ec2.set_base_image(
         base_image=base_image
+    )
+    more_like_this_ec2.set_base_block_device_mapping(
+        block_device_mapping=base_ec2_instance.block_device_mapping
     )
     more_like_this_ec2.set_base_interfaces(
         base_interfaces=base_ec2_instance.interfaces
