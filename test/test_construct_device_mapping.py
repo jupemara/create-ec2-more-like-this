@@ -6,7 +6,6 @@ import logging
 import boto.ec2
 import boto.ec2.blockdevicemapping
 import moto
-import moto.ec2.models
 import nose.tools
 
 import more_like_this

@@ -1006,25 +1006,29 @@ class MoreLikeThisEC2Instance(object):
                     instance_status.lower() != 'ok' and
                     system_status.lower() != 'ok'
                 ):
-                    status = self.conn.get_all_instance_status(
+                    statuses = self.conn.get_all_instance_status(
                         instance_ids=[instance.id]
-                    )[0]
-                    instance_status = status.instance_status.status
-                    system_status = status.system_status.status
-                    logging.info(
-                        'Instance status is {0}'.format(instance_status)
                     )
-                    logging.info(
-                        'System status is {0}'.format(system_status)
-                    )
-                    time.sleep(checking_state_term)
-                    pending_count += 1
-
-                    if pending_count > checking_count_threshold:
-                        logging.warn(
-                            'Checking instance state is timeout.'
+                    if len(statuses) > 0:
+                        status = statuses[0]
+                        instance_status = status.instance_status.status
+                        system_status = status.system_status.status
+                        logging.info(
+                            'Instance status is {0}'.format(instance_status)
                         )
-                        break
+                        logging.info(
+                            'System status is {0}'.format(system_status)
+                        )
+                        time.sleep(checking_state_term)
+                        pending_count += 1
+
+                        if pending_count > checking_count_threshold:
+                            logging.warn(
+                                'Checking instance state is timeout.'
+                            )
+                            break
+                    else:
+                        time.sleep(checking_state_term)
             return instance
 
 
