@@ -1028,6 +1028,9 @@ class MoreLikeThisEC2Instance(object):
                             )
                             break
                     else:
+                        logging.warn(
+                            'Failed to get instance status. Get status over again.'
+                        )
                         time.sleep(checking_state_term)
             return instance
 
