@@ -475,11 +475,11 @@ def verify_ec2_instance_by_private_ip_address(conn, private_ip_address):
     logging.debug(
         'All private IP addresses are {0}'.format(all_private_ips)
     )
-    if private_ip_address in all_private_ips:
-        raise EC2MoreLikeThisException(
-            'Specified private IP {0} is already used.'
-            ''.format(private_ip_address)
-        )
+   #if private_ip_address in all_private_ips:
+   #    raise EC2MoreLikeThisException(
+   #        'Specified private IP {0} is already used.'
+   #        ''.format(private_ip_address)
+   #    )
     return True
 
 
@@ -743,7 +743,9 @@ class MoreLikeThisEC2Instance(object):
         :type device: str
         """
         if device is None:
-            device = self.get_image_root_device_name(base_image=self.base_image)
+            device = self.get_image_root_device_name(
+                base_image=self.base_image
+            )
 
         if device in self.device_mapping.keys():
             self.device_mapping[device][name] = value
@@ -762,7 +764,9 @@ class MoreLikeThisEC2Instance(object):
         :param device: device name. e.x: /dev/sdh
         :type device: str
         """
-        root_device = self.get_image_root_device_name(base_image=self.base_image)
+        root_device = self.get_image_root_device_name(
+            base_image=self.base_image
+        )
         devices = self.device_mapping.keys()
         devices.remove(root_device)
         current_optional_device = devices[0]
@@ -1029,7 +1033,10 @@ class MoreLikeThisEC2Instance(object):
                             break
                     else:
                         logging.warn(
-                            'Failed to get instance status. Get status over again.'
+                            (
+                                'Failed to get instance status. '
+                                'Get status over again.'
+                            )
                         )
                         time.sleep(checking_state_term)
             return instance
