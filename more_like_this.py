@@ -467,8 +467,14 @@ def verify_ec2_instance_by_name(conn, name):
     return True
 
 
-def verify_ec2_instance_by_private_ip_address(conn, private_ip_address):
-    all_nics = conn.get_all_network_interfaces()
+def verify_ec2_instance_by_private_ip_address(conn,
+                                              private_ip_address,
+                                              vpc_id=None):
+    all_nics = conn.get_all_network_interfaces(
+        filters={
+            'vpc_id': vpc_id
+        }
+    )
     all_private_ips = [
         entry.private_ip_address for entry in all_nics
     ]
@@ -495,7 +501,7 @@ def get_base_ec2_instance(conn,
     :param base_ec2_id: Instance id of based ec2 instance
     :type base_ec2_id: str
     :rtype: list
-    :return: EC2 Reservation
+    :return: EC2 Instance
     """
 
     if not base_ec2_name and not base_ec2_id:
@@ -1051,23 +1057,25 @@ def main():
             conn=conn,
             name=options.hostname
         )
+    base_ec2_instance = get_base_ec2_instance(
+        conn=conn,
+        base_ec2_name=options.base_ec2_name,
+        base_ec2_id=options.base_ec2_id
+    )
     if options.override_primary_nic_private_ip_address:
         verify_ec2_instance_by_private_ip_address(
             conn=conn,
-            private_ip_address=options.override_primary_nic_private_ip_address
+            private_ip_address=options.override_primary_nic_private_ip_address,
+            vpc_id=base_ec2_instance.vpc_id
         )
     if options.override_secondary_nic_private_ip_address:
         verify_ec2_instance_by_private_ip_address(
             conn=conn,
             private_ip_address=(
                 options.override_secondary_nic_private_ip_address
-            )
+            ),
+            vpc_id=base_ec2_instance.vpc_id
         )
-    base_ec2_instance = get_base_ec2_instance(
-        conn=conn,
-        base_ec2_name=options.base_ec2_name,
-        base_ec2_id=options.base_ec2_id
-    )
     if not options.override_ami_id:
         base_image = get_ami(
             conn=conn,
