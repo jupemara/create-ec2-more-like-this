@@ -69,8 +69,10 @@ class TestApplyEC2OverrideOptions(test.base.BaseMoreLikeThisEC2Instance):
             value='c3.xlarge'
         )
 
+    # When moto is implemented ec2 attribute disable_api_termination,
+    # we conduct this unit test.
     @moto.mock_ec2
-    def test_override_terminate_protection(self):
+    def notest_override_terminate_protection(self):
         """
         test --override-terminate-protection option
         This test may be failed,
@@ -82,8 +84,10 @@ class TestApplyEC2OverrideOptions(test.base.BaseMoreLikeThisEC2Instance):
             value=True
         )
 
+    # When moto is implemented ec2 attribute disable_api_termination,
+    # we conduct this unit test.
     @moto.mock_ec2
-    def test_override_instance_initiated_shutdown_behavior(self):
+    def nottest_override_instance_initiated_shutdown_behavior(self):
         """
         test --override-shutdown-behavior option
         This test may be failed,
