@@ -897,20 +897,21 @@ class MoreLikeThisEC2Instance(object):
                 )
             )
             try:
-                volume = self.conn.get_all_volumes(
+                volumes = self.conn.get_all_volumes(
                     volume_ids=[value.volume_id]
-                )[0]
-                volume.add_tag(
-                    key='Name',
-                    value=tag_value
                 )
-                logging.info(
-                    'Add tag {{Name: {value}}} to {device}'
-                    ''.format(
-                        value=tag_value,
-                        device=key
+                if len(volumes) > 0:
+                    volume.add_tag(
+                        key='Name',
+                        value=tag_value
                     )
-                )
+                    logging.info(
+                        'Add tag {{Name: {value}}} to {device}'
+                        ''.format(
+                            value=tag_value,
+                            device=key
+                        )
+                    )
             except Exception as exception:
                 raise EC2MoreLikeThisException(
                     exception.__str__()
