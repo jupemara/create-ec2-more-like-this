@@ -1,6 +1,8 @@
 create-ec2-more-like-this
 =========================
 
+![Circle CI build status](https://circleci.com/gh/JumpeiArashi/creat-ec2-more-like-this.svg?style=shield&circle-token=:73be2d63d115ec3560d8efb69139562d482197bd)
+
 
 What is this script??
 ---------------------
