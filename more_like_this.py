@@ -938,7 +938,8 @@ class MoreLikeThisEC2Instance(object):
             )
             print('EC2 options: ')
             for key, value in run_params.items():
-                print('  {0}: {1}'.format(key, value))
+                if key != 'user_data':
+                    print('  {0}: {1}'.format(key, value))
             print('EBS options: ')
             for key, value in run_params['block_device_map'].items():
                 print('  {0}: {1}'.format(key, value.__dict__))
