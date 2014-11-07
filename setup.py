@@ -12,7 +12,7 @@ setup(
     author='ARASHI, Jumpei',
     author_email='jumpei.arashi@arashike.com',
     url='https://github.com/JumpeiArashi/creat-ec2-more-like-this',
-    license='MIT',
+    license='WFTPL',
     install_requires=[
         'boto'
     ],
