@@ -11,13 +11,13 @@ setup(
     version='0.1.0',
     author='ARASHI, Jumpei',
     author_email='jumpei.arashi@arashike.com',
-    url='https://github.com/JumpeiArashi/creat-ec2-more-like-this',
+    url='https://github.com/JumpeiArashi/create-ec2-more-like-this',
     license='WFTPL',
     install_requires=[
         'boto'
     ],
     test_suite='test',
-    test_requires=[
+    tests_require=[
         'nose',
         'moto'
     ]
