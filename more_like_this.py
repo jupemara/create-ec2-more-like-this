@@ -901,6 +901,7 @@ class MoreLikeThisEC2Instance(object):
                     volume_ids=[value.volume_id]
                 )
                 if len(volumes) > 0:
+                    volume = volumes[0]
                     volume.add_tag(
                         key='Name',
                         value=tag_value
