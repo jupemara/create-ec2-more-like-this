@@ -968,6 +968,8 @@ class MoreLikeThisEC2Instance(object):
                 **run_params
             )
             instance = reservation.instances[0]
+            import time
+            time.sleep(120)
 
             if self.ec2_tags:
                 for key, value in self.ec2_tags.items():
